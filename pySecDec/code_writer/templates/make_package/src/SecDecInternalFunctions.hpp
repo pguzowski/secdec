@@ -97,81 +97,22 @@ namespace %(name)s
     #endif
     Tbase SecDecInternalPow(Tbase base, int exponent)
     {
-
-        #ifndef SECDEC_WITH_CUDA
-            if (exponent > 1024 or exponent < -1024)
-                return std::pow(base, exponent);
-        #endif
-
-        if (exponent < 0)
-            return Tbase(1)/SecDecInternalPow(base, -exponent);
-
-        else if (exponent == 0)
-            return Tbase(1);
-
-        else if (exponent == 1)
-            return base;
-
-        else if (exponent == 2)
-            return base * base;
-
-        else if (exponent == 3)
-            return base * base * base;
-
-        else if (exponent == 4)
-        {
-            Tbase result = base;
-            result *= result;
-            result *= result;
-            return result;
+      if(exponent < 0) {
+        base = Tbase(1)/base;
+        exponent = -exponent;
+      }
+      Tbase result(1);
+      while(exponent) {
+        if(exponent & 1) {
+          result = result * base;
         }
-
-        else if (exponent == 5)
-        {
-            Tbase result = base;
-            result *= result;
-            result *= result;
-            return result * base;
+        exponent = exponent>>1;
+        if(exponent) {
+          base = base*base;
         }
-
-        else if (exponent == 6)
-        {
-            Tbase result = base * base * base;
-            return result * result;
-        }
-
-        else if (exponent == 7)
-        {
-            Tbase result = base * base * base;
-            return result * result * base;
-        }
-
-        else if (exponent == 8)
-        {
-            Tbase result = base;
-            result *= result;
-            result *= result;
-            return result * result;
-        }
-
-        else if (exponent == 16)
-        {
-            Tbase tmp = base * base;
-            tmp *= tmp;
-            tmp *= tmp;
-            tmp *= tmp;
-            return tmp;
-        }
-
-        unsigned half_exponent = exponent / 2;
-        Tbase out = SecDecInternalPow(base, half_exponent);
-
-        out *= out;
-        if (2 * half_exponent == exponent) // exponent is even
-            return out;
-        else // exponent is odd --> need another factor of the base due to integer division above
-            return out * base;
-    }
+      }
+      return result;
+    }        
 
     #ifdef SECDEC_WITH_CUDA
       __host__ __device__
