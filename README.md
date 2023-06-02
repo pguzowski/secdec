@@ -6,11 +6,12 @@ pySecDec
 pySecDec is a toolbox for the calculation of dimensionally
 regulated parameter integrals using the sector decomposition approach.
 
-See [2108.10807], [1811.11720], and [1703.09692] for description of the
+See [2305.19768], [2108.10807], [1811.11720], and [1703.09692] for description of the
 implementation; [0803.4177] and [hep-ph/0004013] for description
 of sector decomposition; and [1502.06595] for SecDec, the
 predecessor of pySecDec.
 
+[2305.19768]: https://arxiv.org/abs/2305.19768
 [2108.10807]: https://arxiv.org/abs/2108.10807
 [1811.11720]: https://arxiv.org/abs/1811.11720
 [1811.11720]: https://arxiv.org/abs/1811.11720
@@ -22,7 +23,7 @@ predecessor of pySecDec.
 Installation
 ============
 
-pySecDec should work under Python version 3.6 or newer on the
+pySecDec should work under Python version 3.8 or newer on the
 usual Unix-like systems.
 
 The latest release can be installed from [PyPI] by first
@@ -34,40 +35,31 @@ and then running:
 
     $ python3 -m pip install --user --upgrade pySecDec
 
+This command will install the prebuild version of `pySecDec` if it
+is available; if not, then the dependencies will be compiled from
+source (this might take a while). One can also force building
+from source like this:
+
+    $ python3 -m pip install --user --upgrade --no-binary :all: pySecDec
+
 [pypi]: https://pypi.org/project/pySecDec/
 [pip]: https://pypi.org/project/pip/
 
 ## Additional dependencies
 
-The intended main usage of pySecDec is to make it write C++ packages using the functions
-`pySecDec.code_writer.make_package` and `pySecDec.loop_integral.loop_package`.
-In order to build these C++ packages, the following additional non-python-based libraries
-and programs are required:
+`pySecDec` and the integration libraries it produces depend
+on multiple third-party non-Python packages, all of which are
+contained in `pySecDecContrib/` folder and will be automatally
+built during the normal installation procedure. These packages
+are:
 
- * CUBA (http://www.feynarts.de/cuba/)
- * FORM (http://www.nikhef.nl/~form/)
- * GSL (http://www.gnu.org/software/gsl/)
- * SecDecUtil (part of pySecDec), and its dependency:
-
-   * Catch (https://github.com/philsquared/Catch)
-
-The functions `pySecDec.code_writer.make_package` and
-`pySecDec.loop_integral.loop_package` can use the external program
-`dreadnaut` to find all sector symmetries and therefore reduce
-the number of sectors:
-
- * NAUTY (http://pallini.di.uniroma1.it/)
-[B. D. McKay and A. Piperno, Practical graph isomorphism, II, 2014, Journal of Symbolic Computation, 60, 94-112,
-doi:10.1016/j.jsc.2013.09.003]
-
-The geometric decomposition methods (`decomposition_method='geometric'` or `'geometric_ku'`) depend on:
-
- * Normaliz (https://www.normaliz.uni-osnabrueck.de)
-   [W. Bruns and B. Ichim and T. Römer and R. Sieg and C. Söger]
-
-These packages are redistributed along with pySecDec itself,
-and will be built automatically during pySecDec installation.
-
+ * QMC (https://github.com/mppmu/qmc), used for the `Qmc` integrator.
+ * CUBA (http://www.feynarts.de/cuba/), used for `Vegas`, `Suave`, `Divonne`, and `Cuhre` integrators.
+ * GSL (http://www.gnu.org/software/gsl/), used for the `CQuad` integrator.
+ * FORM (http://www.nikhef.nl/~form/), used to optimize the integrands.
+ * Nauty and Traces (http://pallini.di.uniroma1.it/), used by `pySecDec.make_package` to find symmetries between sectors (if `use_dreadnaut` is set to `True`).
+ * Normaliz (https://www.normaliz.uni-osnabrueck.de), used by the geometric decomposition module (`decomposition_method` set to `'geometric'` or `'geometric_ku'`).
+ * Catch (https://github.com/philsquared/Catch) used by SedDecUtil (part of pySecDec) for unit testing.
 
 Basic Usage
 ===========
@@ -114,6 +106,8 @@ code repository (`examples` directory). Here are some of them:
  * `two_regulators`: an integral involving poles in two different regulators.
  * `userdefined_cpp`: a collection of examples demonstrating how to combine polynomials to be decomposed with other user-defined functions.
 
+Note that the examples are not installed via the normal installation
+procedure. They can only be found in the source code repository.
 
 Development
 ===========
@@ -128,6 +122,14 @@ to the sources; do this by running
     $ make build
     $ export PYTHONPATH=$PWD
 
+Note that `make dependencies` will install the dependency
+libraries using `python3` binary by default. A different Python
+binary can be chosen for this by setting the `PYTHON` argument
+to it, for example:
+
+    $ make dependencies PYTHON=python3.10
+    $ make build PYTHON=python3.10
+
 The ``Makefile`` in the package's root directory also implements
 other common development tasks.  You can list all available
 targets with the command
@@ -136,7 +138,7 @@ targets with the command
 
 `pySecDec` comes with a self test suite written in the `python
 unittest` framework. The most convenient way to run all test is
-using [Nose]. If Nose is installed (as it would be after `make
+using [pytest]. If pytest is installed (as it would be after `make
 dependencies`), type
 
     $ make check
@@ -145,7 +147,7 @@ in the source repository to run all tests. Developers should write test cases fo
 ALL functions they implement and make sure that ALL tests pass before uploading a
 commit.
 
-[nose]: http://nose.readthedocs.org
+[pytest]: https://docs.pytest.org/
 
 ## Building the Documentation
 

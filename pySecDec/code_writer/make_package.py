@@ -12,7 +12,7 @@ from ..algebra import _Expression, Expression, Polynomial, \
 from .. import decomposition
 from ..matrix_sort import iterative_sort, Pak_sort, light_Pak_sort
 from ..subtraction import integrate_pole_part, integrate_by_parts, pole_structure as compute_pole_structure
-from ..expansion import expand_singular, expand_Taylor, expand_sympy, OrderError
+from ..expansion import expand_singular, expand_Taylor, expand_ginac, OrderError
 from ..misc import lowest_order, parallel_det, det
 from .template_parser import validate_pylink_qmc_transforms, generate_pylink_qmc_macro_dict, parse_template_file, parse_template_tree
 from itertools import chain, repeat
@@ -369,6 +369,7 @@ def _parse_global_templates(name, regulators, polynomial_names,
                                      requested_orders = _make_FORM_list(requested_orders),
                                      nested_series_type = nested_series_type,
                                      pySecDec_version = version,
+                                     python_executable = sys.executable,
                                      python_version = sys.version,
                                      pySecDec_git_id = git_id,
                                      contrib_dirname = pySecDecContrib.dirname,
@@ -636,7 +637,7 @@ def _make_prefactor_function(expanded_prefactor, real_parameters, complex_parame
             outstr_head = '{%i,%i,{' % (min_order,max_order)
             for coeff in expression.coeffs:
                 outstr_body_snippets.append( recursion(regulator_index + 1, coeff) )
-            outstr_tail = '},true' if expression.truncated else '},false'
+            outstr_tail = '},true' if getattr(expression, "truncated", True) else '},false'
             outstr_tail += ',"%s"}' % regulators[regulator_index]
             return ''.join( (outstr_head, ','.join(outstr_body_snippets), outstr_tail) )
         else: # regulator_index == last_regulator_index; i.e. processing last regulator
@@ -644,7 +645,7 @@ def _make_prefactor_function(expanded_prefactor, real_parameters, complex_parame
             outstr_body_snippets = []
             for coeff in expression.coeffs:
                 outstr_body_snippets.append( sp.printing.ccode(coeff.evalf(20)) )
-            outstr_tail = '}},true' if expression.truncated else '}},false'
+            outstr_tail = '}},true' if getattr(expression, "truncated", True) else '}},false'
             outstr_tail += ',"%s"}' % regulators[regulator_index]
             return ''.join( (outstr_head, '},{'.join(outstr_body_snippets), outstr_tail) )
 
@@ -886,6 +887,7 @@ def _process_secondary_sector(environment):
     error_token = environment['error_token']
     template_replacements = environment['template_replacements']
     prefactor = environment['prefactor']
+    pylink_qmc_transforms = environment['pylink_qmc_transforms']
     if contour_deformation_polynomial is not None:
         contourdef_Jacobian_determinant = environment['contourdef_Jacobian_determinant']
         contourdef_Jacobian = environment['contourdef_Jacobian']
@@ -1375,6 +1377,7 @@ def _process_secondary_sector(environment):
     template_replacements['sector_codegen_sources'] = \
             "codegen/sector%i.h" % sector_index if contour_deformation_polynomial is None else \
             "codegen/sector%i.h codegen/contour_deformation_sector%i.h" % (sector_index, sector_index)
+    template_replacements['default_qmc_transform'] = pylink_qmc_transforms[0]
     parse_template_file(os.path.join(template_sources, 'codegen', 'sector.h'), # source
                         os.path.join(name,             'codegen', 'sector%i.h' % sector_index), # dest
                         template_replacements)
@@ -1433,7 +1436,7 @@ def make_package(name, integration_variables, regulators, requested_orders,
                  polynomials_to_decompose, polynomial_names=[], other_polynomials=[],
                  prefactor=1, remainder_expression=1, functions=[], real_parameters=[],
                  complex_parameters=[], form_optimization_level=2, form_work_space='50M',
-                 form_memory_use=None, form_threads=2,
+                 form_memory_use=None, form_threads=1,
                  form_insertion_depth=5, contour_deformation_polynomial=None, positive_polynomials=[],
                  decomposition_method='iterative_no_primary', normaliz_executable=None,
                  enforce_complex=False, split=False, ibp_power_goal=-1, use_iterative_sort=True,
@@ -1585,7 +1588,7 @@ def make_package(name, integration_variables, regulators, requested_orders,
 
     :param form_threads:
         integer, optional;
-        Number of threads (T)FORM will use. Default: ``2``.
+        Number of threads (T)FORM will use. Default: ``1``.
 
     :param form_insertion_depth:
         nonnegative integer, optional;
@@ -1738,6 +1741,8 @@ def make_package(name, integration_variables, regulators, requested_orders,
         list or None, optional;
         Required qmc integral transforms, options are:
 
+        * ``none``
+        * ``baker``
         * ``korobov<i>x<j>`` for 1 <= i,j <= 6
         * ``korobov<i>`` for 1 <= i <= 6 (same as ``korobov<i>x<i>``)
         * ``sidi<i>`` for 1 <= i <= 6
@@ -2135,8 +2140,11 @@ def make_package(name, integration_variables, regulators, requested_orders,
     # expand the `prefactor` to the required orders
     required_prefactor_orders = requested_orders - lowest_orders
     print('expanding the prefactor', prefactor, '(regulators:', regulators, ', orders:', required_prefactor_orders, ')')
-    expanded_prefactor = expand_sympy(prefactor, regulators, required_prefactor_orders)
+    expanded_prefactor = expand_ginac(prefactor, regulators, required_prefactor_orders)
     print(repr(expanded_prefactor))
+
+    # update `highest_prefactor_pole_orders`, can change as prefactor could be of form `1 + (1/a + 1)*b`, i.e. can get poles in `a` as we expand in `b`
+    highest_prefactor_pole_orders = -np.array([lowest_order(expanded_prefactor, regulator) for regulator in regulators])
 
     # pack the `prefactor` into c++ function that returns a nested `Series`
     # and takes the `real_parameters` and the `complex_parameters`

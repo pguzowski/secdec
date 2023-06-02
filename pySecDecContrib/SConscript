@@ -2,19 +2,21 @@ import sys
 
 Import("env")
 
-cuba = "Cuba-4.2.1"
-form = "form-4.2.1"
+cuba = "Cuba-4.2.2"
+form = "form-4.3.0"
 gmp = "gmp-6.2.1"
-gsl = "gsl-2.5"
-nauty = "nauty26r7"
+gsl = "gsl-2.7.1"
+nauty = "nauty2_8_6"
 normaliz = "normaliz-3.9.2"
 cln = "cln-1.3.6"
-ginac = "ginac-1.8.3"
+ginac = "ginac-1.8.4"
 
 contrib_extra_source = File(Split(f"""
     SConscript
     {gmp}.list
     {gsl}.list
+    {cln}.list
+    {ginac}.list
 """))
 
 contrib = []
@@ -32,7 +34,7 @@ contrib += \
     Install("include/secdecutil", Glob("util/secdecutil/*hpp")) + \
     Install("include/secdecutil/integrators", Glob("util/secdecutil/integrators/*hpp"))
 
-def ConfigureAndInstall(env, target, packagename, extension=".tar.gz", extra_sources=[], pre_commands="", post_commands="", extra_configure_args="", install_target="install"):
+def ConfigureAndInstall(env, target, packagename, extension=".tar.gz", extra_sources=[], pre_commands="", post_commands="", extra_configure_args="", build_target="", install_target="install"):
     return env.Command(target, [f"{packagename}{extension}"] + extra_sources, f"""
         cd pySecDecContrib && \
         tar -xf {packagename}{extension} && \
@@ -45,7 +47,7 @@ def ConfigureAndInstall(env, target, packagename, extension=".tar.gz", extra_sou
             --bindir="$$PWD/../bin" \
             {extra_configure_args} && \
         {post_commands} \
-        make && \
+        make {build_target} && \
         make {install_target} && \
         cd .. && \
         rm -rf */*.la {packagename}
@@ -55,12 +57,13 @@ cuba_files = ["lib/libcuba.a", "include/cuba.h"]
 contrib += \
     ConfigureAndInstall(env, cuba_files, cuba,
         pre_commands="""\
-            sed -i.bak 's/mcc/false/g' configure && \
+            sed -i.bak -e 's/mcc/NOmcc/g' -e 's/qmake/NOqmake/g' configure && \
             sed -i.bak \
                 -e 's/puts(s)/fputs(s,stderr); putc(10,stderr)/' \
                 -e 's/stdout/stderr/g' src/common/stddecl.h && \
         """,
-        extra_configure_args="CFLAGS='-O3 -fomit-frame-pointer -ffast-math -fno-finite-math-only -fexceptions -fcommon -fPIC'")
+        extra_configure_args="CFLAGS='-O3 -fomit-frame-pointer -ffast-math -fno-finite-math-only -fexceptions -fcommon -fPIC'",
+        build_target="lib")
 
 form_files = ["bin/form", "bin/tform"]
 contrib += \
@@ -70,6 +73,7 @@ contrib += \
 gmp_files = open(f"{gmp}.list").read().splitlines()
 contrib += \
     ConfigureAndInstall(env, gmp_files, gmp, extension=".tar.bz2",
+        pre_commands="mv config.guess config.guess.orig && ln -sf configfsf.guess config.guess && ",
         extra_configure_args="--enable-cxx --enable-fat --disable-shared --enable-static --with-pic --exec-prefix=\"$$PWD/..\"")
 
 gsl_files = open(f"{gsl}.list").read().splitlines()
@@ -83,7 +87,7 @@ contrib += \
         cd pySecDecContrib && \
         tar -xf {nauty}.tar.gz && \
         cd {nauty} && \
-        ./configure --disable-popcnt --disable-clz && \
+        ./configure --enable-generic --disable-popcnt --disable-clz && \
         make dreadnaut && \
         strip dreadnaut && \
         cp -a dreadnaut ../bin/dreadnaut && \

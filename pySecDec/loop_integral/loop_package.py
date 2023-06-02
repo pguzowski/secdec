@@ -26,8 +26,8 @@ def LoopPackage(name, loop_integral, requested_orders=None,
                  form_optimization_level=2,
                  form_work_space='50M',
                  form_memory_use=None,
-                 form_threads=2,
-                 decomposition_method='iterative',
+                 form_threads=1,
+                 decomposition_method='geometric',
                  normaliz_executable=None,
                  enforce_complex=False,
                  split=False, ibp_power_goal=-1,
@@ -129,7 +129,7 @@ def loop_package(name, loop_integral, requested_orders=None,
                  form_optimization_level=2,
                  form_work_space='50M',
                  form_memory_use=None,
-                 form_threads=2,
+                 form_threads=1,
                  decomposition_method='iterative',
                  normaliz_executable=None,
                  enforce_complex=False,
@@ -227,15 +227,15 @@ def loop_package(name, loop_integral, requested_orders=None,
 
     :param form_threads:
         integer, optional;
-        Number of threads (T)FORM will use. Default: ``2``.
+        Number of threads (T)FORM will use. Default: ``1``.
 
     :param decomposition_method:
         string, optional;
         The strategy for decomposing the polynomials. The
         following strategies are available:
 
-        * 'iterative' (default)
-        * 'geometric'
+        * 'iterative'
+        * 'geometric' (default)
         * 'geometric_ku'
 
     :param enforce_complex:
@@ -330,6 +330,8 @@ def loop_package(name, loop_integral, requested_orders=None,
         list or None, optional;
         Required qmc integral transforms, options are:
 
+        * ``none``
+        * ``baker``
         * ``korobov<i>x<j>`` for 1 <= i,j <= 6
         * ``korobov<i>`` for 1 <= i <= 6 (same as ``korobov<i>x<i>``)
         * ``sidi<i>`` for 1 <= i <= 6

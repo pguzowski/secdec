@@ -786,7 +786,6 @@ class Polynomial(_Expression):
         result.simplify()
         return result
 
-
 class ExponentiatedPolynomial(Polynomial):
     '''
     Like :class:`.Polynomial`, but with a global exponent.

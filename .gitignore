@@ -6,7 +6,7 @@ doc/source/cpp_doctest/*
 !doc/source/cpp_doctest/*.cpp
 !doc/source/cpp_doctest/*.cu
 !doc/source/cpp_doctest/Makefile
-.coverage
+.coverage*
 coverage
 *.swp
 
@@ -26,6 +26,9 @@ htmlcov/
 
 # Ignore PyCharm Cache
 .idea
+
+# Ignore vscode Cache
+*.vscode
 
 # ignore built examples (i.e. folders within examples/nodist_examples folders)
 examples/*/*/

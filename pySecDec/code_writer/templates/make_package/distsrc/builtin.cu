@@ -23,7 +23,7 @@
         value_t val6 = (idx+5 < n) ? src[idx+5] : value_t(0); \
         value_t val7 = (idx+6 < n) ? src[idx+6] : value_t(0); \
         value_t val8 = (idx+7 < n) ? src[idx+7] : value_t(0); \
-        value_t val = val1 + val2 + val3 + val4 + val5 + val6 + val7 + val8; \
+        value_t val = ((val1 + val2) + (val3 + val4)) + ((val5 + val6) + (val7 + val8)); \
         typedef cub::BlockReduce<value_t, 128, cub::BLOCK_REDUCE_RAKING_COMMUTATIVE_ONLY> Reduce; \
         __shared__ typename Reduce::TempStorage shared; \
         value_t sum = Reduce(shared).Sum(val); \
@@ -68,11 +68,11 @@ builtin__gauge( // sunset, nu=(1,2,3), realp=(q2, m1sq, m2sq, m3sq), sector=1, o
         li_x0 = warponce_i(li_x0 + genvec[0], lattice);
         real_t x1 = warponce(li_x1*invlattice + shift[1], 1.0);
         li_x1 = warponce_i(li_x1 + genvec[1], lattice);
-        real_t w_x0 = korobov3_w(x0);
-        real_t w_x1 = korobov3_w(x1);
+        real_t w_x0 = korobov3x3_w(x0);
+        real_t w_x1 = korobov3x3_w(x1);
         real_t w = w_x0*w_x1;
-        x0 = korobov3_f(x0);
-        x1 = korobov3_f(x1);
+        x0 = korobov3x3_f(x0);
+        x1 = korobov3x3_f(x1);
         auto tmp1_1 = -q2 + m2sq + m3sq + m1sq;
         auto tmp1_2 = 2*m3sq;
         auto tmp1_3 = tmp1_2*x0;

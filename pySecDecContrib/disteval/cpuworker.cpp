@@ -181,6 +181,17 @@ cmd_family(uint64_t token, FamilyCmd &c)
 }
 
 static double
+cmd_change_family_parameters(uint64_t token, FamilyCmd &c)
+{
+    assert(c.index < families.size());
+    Family &fam = families[c.index];
+    memcpy(fam.realp, c.realp, sizeof(fam.realp));
+    memcpy(fam.complexp, c.complexp, sizeof(fam.complexp));
+    printf("@[%" PRIu64 ",null,null]\n", token);
+    return 0;
+}
+
+static double
 cmd_kernel(uint64_t token, KernelCmd &c)
 {
     assert(c.familyidx < families.size());
@@ -265,7 +276,7 @@ cmd_integrate(uint64_t token, IntegrateCmd &c)
         fam.realp, fam.complexp, c.deformp);
     double t2 = timestamp();
     if (unlikely((isnan(result.re) || isnan(result.im)) ^ (r != 0))) {
-        printf("@[%" PRIu64 ",[[NaN,NaN],%" PRIu64 ",%.4e],\"NaN != sign check error %d in %s.%s\"]", token, c.i2-c.i1, t2-t1, r, fam.name, ker.name);
+        printf("@[%" PRIu64 ",[[NaN,NaN],%" PRIu64 ",%.4e],\"NaN != sign check error %d in %s.%s\"]\n", token, c.i2-c.i1, t2-t1, r, fam.name, ker.name);
     } else if (isnan(result.re) || isnan(result.im)) {
         printf("@[%" PRIu64 ",[[NaN,NaN],%" PRIu64 ",%.4e],null]\n", token, c.i2-c.i1, t2-t1);
     } else {
@@ -520,21 +531,35 @@ parse_cmd_evalf(uint64_t token)
         input_getchar();
     }
     match_str("]]]\n");
-    double t2 = timestamp();
-    std::ostringstream s;
     auto br = ginac_bracket(expr.expand(), varlist);
-    bool first = true;
+    std::map<std::vector<int>, complex_t> brc;
     for (auto &&kv : br) {
-        if (first) { first = false; } else { s << ','; }
-        s << "[[";
+        GiNaC::ex val = kv.second.evalf();
+        GiNaC::ex val_re = val.real_part();
+        GiNaC::ex val_im = val.imag_part();
+        if (GiNaC::is_a<GiNaC::numeric>(val_re) && GiNaC::is_a<GiNaC::numeric>(val_im)) {
+            double re = GiNaC::ex_to<GiNaC::numeric>(val_re).to_double();
+            double im = GiNaC::ex_to<GiNaC::numeric>(val_im).to_double();
+            brc[kv.first] = complex_t{re, im};
+        } else {
+            printf("@[%" PRIu64 ",null,\"the coefficient is not numeric after substitution\"]\n", token);
+            return 0;
+        }
+    }
+    double t2 = timestamp();
+    printf("@[%" PRIu64 ",[", token);
+    bool first = true;
+    for (auto &&kv : brc) {
+        if (first) { first = false; } else { putchar(','); }
+        printf("[[");
         bool first2 = true;
         for (auto &&i : kv.first) {
-            if (first2) { first2 = false; } else { s << ','; }
-            s << i;
+            if (first2) { first2 = false; } else { putchar(','); }
+            printf("%d", i);
         }
-        s << "],\"" << kv.second.evalf() << "\"]";
+        printf("],[%.16e,%.16e]]", kv.second.re, kv.second.im);
     }
-    printf("@[%" PRIu64 ",[%s],null]\n", token, s.str().c_str());
+    printf("],null]\n");
     return t2 - t1;
 }
 
@@ -602,6 +627,17 @@ handle_one_command()
         c.complex_result = parse_bool();
         match_str("]]\n");
         return cmd_family(token, c);
+    }
+    if (c == 'c') {
+        FamilyCmd c = {};
+        match_str("hangefamily\",[");
+        c.index = parse_uint();
+        match_c(',');
+        parse_real_array(c.realp, MAXDIM);
+        match_c(',');
+        parse_complex_array(c.complexp, MAXDIM);
+        match_str("]]\n");
+        return cmd_change_family_parameters(token, c);
     }
     if (c == 'k') {
         KernelCmd c = {};

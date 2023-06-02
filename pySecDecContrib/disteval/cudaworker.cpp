@@ -280,6 +280,16 @@ cmd_family(uint64_t token, FamilyCmd &c)
 }
 
 static void
+cmd_change_family_parameters(uint64_t token, FamilyCmd &c)
+{
+    assert(c.index < G.families.size());
+    Family &fam = G.families[c.index];
+    memcpy(fam.realp, c.realp, sizeof(fam.realp));
+    memcpy(fam.complexp, c.complexp, sizeof(fam.complexp));
+    printf("@[%" PRIu64 ",null,null]\n", token);
+}
+
+static void
 cmd_kernel(uint64_t token, KernelCmd &c)
 {
     assert(c.familyidx < G.families.size());
@@ -373,7 +383,7 @@ worker_thread(void *ps)
                 fam.realp, fam.complexp, c.deformp);
             double t2 = timestamp();
             if (unlikely((isnan(result.re) || isnan(result.im)) ^ (r != 0))) {
-                printf("@[%" PRIu64 ",[[NaN,NaN],%" PRIu64 ",%.4e],\"NaN != sign check error %d in %s.%s\"]", c.token, c.i2-c.i1, t2-t1, r, fam.name, ker.name);
+                printf("@[%" PRIu64 ",[[NaN,NaN],%" PRIu64 ",%.4e],\"NaN != sign check error %d in %s.%s\"]\n", c.token, c.i2-c.i1, t2-t1, r, fam.name, ker.name);
             } else if (isnan(result.re) || isnan(result.im)) {
                 printf("@[%" PRIu64 ",[[NaN,NaN],%" PRIu64 ",%.4e],null]\n", c.token, c.i2-c.i1, t2-t1);
             } else {
@@ -383,16 +393,9 @@ worker_thread(void *ps)
         }
         if (1) { // CUDA path
             uint64_t threads = 128, pt_per_thread = 8;
-            uint64_t blocks = (c.i2 - c.i1 + threads*pt_per_thread - 1)/(threads*pt_per_thread);
-            uint64_t bufsize = fam.complex_result ? blocks*sizeof(complex_t) : blocks*sizeof(real_t);
-            if (bufsize > s.buffer_size) {
-                fprintf(stderr, "%s] realloc CUDA buffer to %" PRIu64 "MB\n", G.workername, bufsize/1024/1024);
-                CU(cuMemFree, s.buffer_d);
-                s.buffer_size = (bufsize + 1024*1024 - 1) & ~(1024*1024 - 1);
-                CU(cuMemAlloc, &s.buffer_d, s.buffer_size);
-                CU(cuMemsetD8Async, s.buffer_d, 0, s.buffer_size, s.stream);
-                CU(cuStreamSynchronize, s.stream);
-            }
+            uint64_t blocksperbatch = fam.complex_result ? s.buffer_size/sizeof(complex_t) : s.buffer_size/sizeof(real_t);
+            uint64_t ptperbatch = blocksperbatch * (threads*pt_per_thread);
+            complex_t result = {0, 0};
             memcpy(s.params->genvec, c.genvec, sizeof(c.genvec));
             memcpy(s.params->shift, c.shift, sizeof(c.shift));
             memcpy(s.params->realp, fam.realp, sizeof(fam.realp));
@@ -405,29 +408,34 @@ worker_thread(void *ps)
             CUdeviceptr realp_d = s.params_d + offsetof(CudaParameterData, realp);
             CUdeviceptr complexp_d = s.params_d + offsetof(CudaParameterData, complexp);
             CUdeviceptr deformp_d = s.params_d + offsetof(CudaParameterData, deformp);
-            void *args[] = {&s.buffer_d, &c.lattice, &c.i1, &c.i2, &genvec_d, &shift_d, &realp_d, &complexp_d, &deformp_d, NULL };
-            CU(cuLaunchKernel, ker.cuda_fn_integrate, blocks, 1, 1, threads, 1, 1, 0, s.stream, args, NULL);
-            void *sum_args[] = {&s.buffer_d, &s.buffer_d, &blocks, NULL};
-            CUfunction fn_sum = fam.complex_result ? G.cuda.fn_sum_c_b128_x1024 : G.cuda.fn_sum_d_b128_x1024;
-            while (blocks > 1) {
-                uint64_t reduced = (blocks + 1024-1)/1024;
-                CU(cuLaunchKernel, fn_sum, reduced, 1, 1, 128, 1, 1, 0, s.stream, sum_args, NULL);
-                blocks = reduced;
+            for (uint64_t i1 = c.i1; i1 < c.i2; i1 += ptperbatch) {
+                uint64_t i2 = i1 + ptperbatch < c.i2 ? i1 + ptperbatch : c.i2;
+                uint64_t blocks = (i2 - i1 + threads*pt_per_thread - 1)/(threads*pt_per_thread);
+                void *args[] = {&s.buffer_d, &c.lattice, &i1, &i2, &genvec_d, &shift_d, &realp_d, &complexp_d, &deformp_d, NULL };
+                CU(cuLaunchKernel, ker.cuda_fn_integrate, blocks, 1, 1, threads, 1, 1, 0, s.stream, args, NULL);
+                void *sum_args[] = {&s.buffer_d, &s.buffer_d, &blocks, NULL};
+                CUfunction fn_sum = fam.complex_result ? G.cuda.fn_sum_c_b128_x1024 : G.cuda.fn_sum_d_b128_x1024;
+                while (blocks > 1) {
+                    uint64_t reduced = (blocks + 1024-1)/1024;
+                    CU(cuLaunchKernel, fn_sum, reduced, 1, 1, 128, 1, 1, 0, s.stream, sum_args, NULL);
+                    blocks = reduced;
+                }
+                s.result->re = 0;
+                s.result->im = 0;
+                CU(cuMemcpyDtoHAsync, s.result, s.buffer_d, fam.complex_result ? sizeof(complex_t) : sizeof(real_t), s.stream);
+                // Without this CU_CTX_SCHED_BLOCKING_SYNC doesn't work,
+                // and cuStreamSynchronize spins with 100% CPU usage.
+                // With this, both CU_CTX_SCHED_BLOCKING_SYNC and
+                // CU_CTX_SCHED_YIELD have the same result: 0% CPU usage
+                // during cuStreamSynchronize.
+                // It's not clear how cuLaunchHostFunc is related here
+                // at all, and the whole thing is completely undocumented.
+                CU(cuLaunchHostFunc, s.stream, stupid_cuda_dummy, NULL);
+                CU(cuStreamSynchronize, s.stream);
+                result.re += s.result->re;
+                result.im += s.result->im;
             }
-            s.result->re = 0;
-            s.result->im = 0;
-            CU(cuMemcpyDtoHAsync, s.result, s.buffer_d, fam.complex_result ? sizeof(complex_t) : sizeof(real_t), s.stream);
-            // Without this CU_CTX_SCHED_BLOCKING_SYNC doesn't work,
-            // and cuStreamSynchronize spins with 100% CPU usage.
-            // With this, both CU_CTX_SCHED_BLOCKING_SYNC and
-            // CU_CTX_SCHED_YIELD have the same result: 0% CPU usage
-            // during cuStreamSynchronize.
-            // How is cuLaunchHostFunc related though?
-            // And how could one possibly find out about this?
-            CU(cuLaunchHostFunc, s.stream, stupid_cuda_dummy, NULL);
-            CU(cuStreamSynchronize, s.stream);
             double t2 = timestamp();
-            complex_t result = *s.result;
             if (isnan(result.re) || isnan(result.im)) {
                 printf("@[%" PRIu64 ",[[NaN,NaN],%" PRIu64 ",%.4e],null]\n", c.token, c.i2-c.i1, t2-t1);
             } else {
@@ -730,21 +738,35 @@ parse_cmd_evalf(uint64_t token)
         input_getchar();
     }
     match_str("]]]\n");
-    double t2 = timestamp();
-    std::ostringstream s;
     auto br = ginac_bracket(expr.expand(), varlist);
-    bool first = true;
+    std::map<std::vector<int>, complex_t> brc;
     for (auto &&kv : br) {
-        if (first) { first = false; } else { s << ','; }
-        s << "[[";
+        GiNaC::ex val = kv.second.evalf();
+        GiNaC::ex val_re = val.real_part();
+        GiNaC::ex val_im = val.imag_part();
+        if (GiNaC::is_a<GiNaC::numeric>(val_re) && GiNaC::is_a<GiNaC::numeric>(val_im)) {
+            double re = GiNaC::ex_to<GiNaC::numeric>(val_re).to_double();
+            double im = GiNaC::ex_to<GiNaC::numeric>(val_im).to_double();
+            brc[kv.first] = complex_t{re, im};
+        } else {
+            printf("@[%" PRIu64 ",null,\"the coefficient is not numeric after substitution\"]\n", token);
+            return;
+        }
+    }
+    double t2 = timestamp();
+    printf("@[%" PRIu64 ",[", token);
+    bool first = true;
+    for (auto &&kv : brc) {
+        if (first) { first = false; } else { putchar(','); }
+        printf("[[");
         bool first2 = true;
         for (auto &&i : kv.first) {
-            if (first2) { first2 = false; } else { s << ','; }
-            s << i;
+            if (first2) { first2 = false; } else { putchar(','); }
+            printf("%d", i);
         }
-        s << "],\"" << kv.second.evalf() << "\"]";
+        printf("],[%.16e,%.16e]]", kv.second.re, kv.second.im);
     }
-    printf("@[%" PRIu64 ",[%s],null]\n", token, s.str().c_str());
+    printf("],null]\n");
     G.useful_time += t2 - t1;
 }
 
@@ -812,6 +834,17 @@ handle_one_command()
         c.complex_result = parse_bool();
         match_str("]]\n");
         return cmd_family(token, c);
+    }
+    if (c == 'c') {
+        FamilyCmd c = {};
+        match_str("hangefamily\",[");
+        c.index = parse_uint();
+        match_c(',');
+        parse_real_array(c.realp, MAXDIM);
+        match_c(',');
+        parse_complex_array(c.complexp, MAXDIM);
+        match_str("]]\n");
+        return cmd_change_family_parameters(token, c);
     }
     if (c == 'k') {
         KernelCmd c = {};

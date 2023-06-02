@@ -83,6 +83,49 @@ def _parse_series(text):
         return terms, variable, order
     return series(text)
 
+def _parse_disteval_series(text):
+    """
+    Parse a series in the disteval format, return a list of entries
+    arranged the same way as in _parse_series().
+    """
+    import re
+    rx_term = re.compile(r"\+([^(]*)\*\(([+-].*[0-9])([+-].*[0-9])j\)(\*plusminus)?")
+    result = []
+    # Parse the text into a {(expo, ...): (value, error)} dictionary.
+    coeffs = {}
+    variables = None
+    for line in text.splitlines():
+        line = line.strip()
+        m = rx_term.fullmatch(line)
+        if m is not None:
+            stem, real, imag, pm = m.groups()
+            if variables is None:
+                variables = [x.split("^")[0] for x in stem.split("*")]
+            powers = tuple(int(x.split("^")[1]) for x in stem.split("*"))
+            real = float(real)
+            imag = float(imag)
+            coeffs.setdefault(powers, [0, 0])
+            coeffs[powers][0 if pm is None else 1] = \
+                real if imag == 0 else complex(real, imag)
+        elif line == "),":
+            result.append({k:tuple(v) for k,v in coeffs.items()})
+            coeffs = {}
+        else:
+            pass
+    result.append({k:tuple(v) for k,v in coeffs.items()})
+    # Turn it into a nested series.
+    def rec(expmap, i):
+        if i >= len(variables):
+            assert(len(expmap) == 1)
+            return next(iter(expmap.values()))
+        co = {}
+        for powers, coeff in expmap.items():
+            power = powers[i]
+            co.setdefault(power, {})
+            co[power][powers] = coeff
+        return [(rec(c, i+1), p) for p, c in co.items()], variables[i], max(co.keys()) + 1
+    return [rec(expr, 0) for expr in result]
+
 def _convert_series(series, power, Order):
     def fmt_value(val, mean):
         if isinstance(val, complex):
@@ -107,8 +150,14 @@ def _convert_series(series, power, Order):
                 " + %s(%s%s%d)" % (Order, var, power, order) if order > 0 else \
                 " + %s(%s%s(%d))" % (Order, var, power, order)
         return " + ".join(fmt_term(val, var, exp, mean) for val, exp in terms) + order
-    terms, variable, order = _parse_series(series)
-    return fmt_series(terms, variable, order, True), fmt_series(terms, variable, order, False)
+    tvolist = \
+            _parse_disteval_series(series) if series.startswith("[") else \
+            [_parse_series(line) for line in series.splitlines()]
+    results = [
+        ( fmt_series(terms, variable, order, True), fmt_series(terms, variable, order, False) )
+        for terms, variable, order in tvolist
+    ]
+    return results if len(results) > 1 else results[0]
 
 def series_to_ginac(series):
     """
@@ -122,6 +171,8 @@ def series_to_ginac(series):
         The format of each returned value may look like this::
 
             (0+0.012665*I)/eps + (0+0.028632*I) + Order(eps)
+
+        If there are multiple series specified, return a list of string pairs.
     """
     def fmt_order(var, order):
         return " + Order(%s)" % (var,) if order == 1 else \
@@ -140,6 +191,8 @@ def series_to_sympy(series):
         The format of each returned value may look like this::
 
             (0+0.012665*I)/eps + (0+0.028632*I) + O(eps)
+
+        If there are multiple series specified, return a list of string pairs.
     """
     return _convert_series(series, "**", "O")
 
@@ -155,6 +208,8 @@ def series_to_mathematica(series):
         The format of each returned value may look like this::
 
             (0+0.012665*I)/eps + (0+0.028632*I) + O[eps]
+
+        If there are multiple series specified, return a list of string pairs.
     """
     def fmt_value(val, mean):
         if isinstance(val, float):
@@ -189,8 +244,14 @@ def series_to_mathematica(series):
                     " + O[%s]^%d" % (var, order) if order > 0 else \
                     " + O[%s]/%s^%d" % (var, var, 1-order)
             return " + ".join(fmt_term(val, var, exp, mean) for val, exp in terms) + order
-    terms, variable, order = _parse_series(series)
-    return fmt_series(terms, variable, order, True), fmt_series(terms, variable, order, False)
+    tvolist = \
+            _parse_disteval_series(series) if series.startswith("[") else \
+            [_parse_series(line) for line in series.splitlines()]
+    results = [
+        ( fmt_series(terms, variable, order, True), fmt_series(terms, variable, order, False) )
+        for terms, variable, order in tvolist
+    ]
+    return results if len(results) > 1 else results[0]
 
 def series_to_maple(series):
     """
@@ -204,6 +265,8 @@ def series_to_maple(series):
         The format of each returned value may look like this::
 
             (0+0.012665*I)/eps + (0+0.028632*I) + O(eps)
+
+        If there are multiple series specified, return a list of string pairs.
     """
     return _convert_series(series, "^", "O")
 
@@ -281,7 +344,8 @@ known_qmc_generatingvectors = dict(
     cbcpt_dn1_100 = 1,
     cbcpt_dn2_6 = 2,
     cbcpt_cfftw1_6 = 3,
-    cbcpt_cfftw2_10 = 4
+    cbcpt_cfftw2_10 = 4,
+    none = 5
 )
 
 class CPPIntegrator(object):
@@ -521,11 +585,31 @@ class Qmc(CPPIntegrator):
         The possible choices correspond to the available generating
         vectors of the underlying Qmc implementation. Possible values
         are ``"default"``, ``"cbcpt_dn1_100"``, ``"cbcpt_dn2_6"``,
-        ``"cbcpt_cfftw1_6"``, and ``"cbcpt_cfftw2_10"``.
+        ``"cbcpt_cfftw1_6"``, and ``"cbcpt_cfftw2_10"``, ``"none"``.
 
         The ``"default"`` value will use all available generating
         vectors suitable for the highest dimension integral
         appearing in the library.
+
+    :param lattice_candidates:
+        int;
+        Number of generating vector candidates used for median QMC rule.
+        If standard_lattices=True, the median QMC is only used once the standard lattices are exhausted
+        lattice_candidates=0 disables the use of the median QMC rule.
+        Default: ``"0"``
+
+    :param standard_lattices:
+        bool; experimental
+        Use pre-computed lattices instead of median QMC.
+        Setting this parameter to ``"False"`` is equal to setting ``"generatingvectors=none"``
+        Default: ``"False"``
+
+    :param keep_lattices:
+        bool; experimental
+        Specifies if list of generating vectors generated using
+        median Qmc rule should be kept for other integrals
+        Default: ``"False"``
+
 
     :param cputhreads:
         int;
@@ -552,7 +636,7 @@ class Qmc(CPPIntegrator):
 
     '''
     def __init__(self,integral_library,transform='korobov3',fitfunction='default',generatingvectors='default',epsrel=1e-2,epsabs=1e-7,maxeval=4611686018427387903,errormode='default',evaluateminn=0,
-                      minn=10000,minm=0,maxnperpackage=0,maxmperpackage=0,cputhreads=None,cudablocks=0,cudathreadsperblock=0,verbosity=0,seed=0,devices=[]):
+                      minn=10000,minm=0,maxnperpackage=0,maxmperpackage=0,cputhreads=None,cudablocks=0,cudathreadsperblock=0,verbosity=0,seed=0,devices=[],lattice_candidates=0,standard_lattices=False,keep_lattices=False):
         if cputhreads is None:
             try:
                 cputhreads = len(os.sched_getaffinity(0))
@@ -578,7 +662,10 @@ class Qmc(CPPIntegrator):
                                                             c_longlong, # seed
                                                             c_int, # transform_id
                                                             c_int, # fitfunction_id
-                                                            c_int # generatingvectors_id
+                                                            c_int, # generatingvectors_id
+                                                            c_ulonglong, # lattice_candidates
+                                                            c_bool, # standard_lattices
+                                                            c_bool # keep_lattices
                                                       ]
 
         # assuming:
@@ -595,13 +682,14 @@ class Qmc(CPPIntegrator):
             errormode_enum = 2
         else:
             raise ValueError('Unknown `errormode` "' + str(errormode) + '"')
-            
+
         self.c_integrator_ptr = self.c_lib.allocate_integrators_Qmc(epsrel,epsabs,maxeval,errormode_enum,evaluateminn,minn,
                                                                     minm,maxnperpackage,maxmperpackage,cputhreads,
                                                                     cudablocks,cudathreadsperblock,verbosity,
                                                                     seed,known_qmc_transforms[str(transform).lower()],
                                                                     known_qmc_fitfunctions[str(fitfunction).lower()],
-                                                                    known_qmc_generatingvectors[str(generatingvectors).lower()]
+                                                                    known_qmc_generatingvectors[str(generatingvectors).lower()],
+                                                                    lattice_candidates,standard_lattices,keep_lattices
                                                                    )
         self._epsrel=epsrel
         self._epsabs=epsabs
@@ -652,6 +740,25 @@ class CudaQmc(object):
         are ``"default"``, ``"cbcpt_dn1_100"``, ``"cbcpt_dn2_6"``,
         ``"cbcpt_cfftw1_6"``, and ``"cbcpt_cfftw2_10"``.
 
+    :param lattice_candidates:
+        int;
+        Number of generating vector candidates used for median QMC rule.
+        If standard_lattices=True, the median QMC is only used once the standard lattices are exhausted
+        lattice_candidates=0 disables the use of the median QMC rule.
+        Default: ``"0"``
+
+    :param standard_lattices:
+        bool;
+        Use pre-computed lattices instead of median QMC.
+        Setting this parameter to ``"False"`` is equal to setting ``"generatingvectors=none"``
+        Default: ``"False"``
+
+    :param keep_lattices:
+        bool;
+        Specifies if list of generating vectors generated using
+        median Qmc rule should be kept for other integrals
+        Default: ``"False"``
+
     :param cputhreads:
         int;
         The number of CPU threads that should be used to evaluate
@@ -677,7 +784,7 @@ class CudaQmc(object):
 
     '''
     def __init__(self,integral_library,transform='korobov3',fitfunction='default',generatingvectors='default',epsrel=1e-2,epsabs=1e-7,maxeval=4611686018427387903,errormode='default',evaluateminn=0,
-                      minn=10000,minm=0,maxnperpackage=0,maxmperpackage=0,cputhreads=None,cudablocks=0,cudathreadsperblock=0,verbosity=0,seed=0,devices=[]):
+                      minn=10000,minm=0,maxnperpackage=0,maxmperpackage=0,cputhreads=None,cudablocks=0,cudathreadsperblock=0,verbosity=0,seed=0,devices=[],lattice_candidates=0,standard_lattices=False,keep_lattices=False):
         devices_t = c_int * len(devices)
         if cputhreads is None:
             try:
@@ -702,6 +809,9 @@ class CudaQmc(object):
                         c_int, # transform_id
                         c_int, # fitfunction_id
                         c_int, # generatingvectors_id
+                        c_ulonglong, # lattice_candidates
+                        c_bool, # standard_lattices
+                        c_bool, # keep_lattices
                         c_ulonglong, # number_of_devices
                         devices_t # devices[]
                    ]
@@ -732,6 +842,7 @@ class CudaQmc(object):
                                                                                                seed,known_qmc_transforms[str(transform).lower()],
                                                                                                known_qmc_fitfunctions[str(fitfunction).lower()],
                                                                                                known_qmc_generatingvectors[str(generatingvectors).lower()],
+                                                                                               lattice_candidates,standard_lattices,keep_lattices,
                                                                                                len(devices),devices_t(*devices)
                                                                                           )
         self.c_integrator_ptr_separate = self.c_lib.allocate_cuda_integrators_Qmc_separate(
@@ -741,6 +852,7 @@ class CudaQmc(object):
                                                                                                seed,known_qmc_transforms[str(transform).lower()],
                                                                                                known_qmc_fitfunctions[str(fitfunction).lower()],
                                                                                                known_qmc_generatingvectors[str(generatingvectors).lower()],
+                                                                                               lattice_candidates,standard_lattices,keep_lattices,
                                                                                                len(devices),devices_t(*devices)
                                                                                           )
         self._epsrel=epsrel
@@ -967,7 +1079,7 @@ class IntegralLibrary(object):
         str, optional;
         Allowed values: ``abs``, ``all``, ``largest``, ``real``, ``imag``.
         Defines how epsrel and epsabs should be applied to complex values.
-        With the choice  ``largest``, the relative uncertainty is defined as 
+        With the choice  ``largest``, the relative uncertainty is defined as
         ``max( |Re(error)|, |Im(error)|)/max( |Re(result)|, |Im(result)|)``.
         Choosing ``all`` will apply epsrel and epsabs to both the real
         and imaginary part separately.
@@ -975,6 +1087,7 @@ class IntegralLibrary(object):
         the choices ``all``, ``real`` or ``imag`` might prevent the integration
         from stopping since the requested precision epsrel cannot be reached.
         Default: ``abs``.
+
 
     .. seealso::
         A more detailed description of these parameters and
@@ -1191,7 +1304,7 @@ class IntegralLibrary(object):
                                 epsrel, epsabs, maxeval,
                                 mineval, maxincreasefac, min_epsrel, min_epsabs,
                                 max_epsrel, max_epsabs, min_decrease_factor,
-                                decrease_to_percentage, wall_clock_limit, 
+                                decrease_to_percentage, wall_clock_limit,
                                 number_of_threads, reset_cuda_after, verbose, errormode_enum
                             ):
         # Passed in correct number of parameters?
@@ -1230,7 +1343,7 @@ class IntegralLibrary(object):
                                                  epsrel, epsabs, maxeval,
                                                  mineval, maxincreasefac, min_epsrel, min_epsabs,
                                                  max_epsrel, max_epsabs, min_decrease_factor,
-                                                 decrease_to_percentage, wall_clock_limit, 
+                                                 decrease_to_percentage, wall_clock_limit,
                                                  number_of_threads, reset_cuda_after, verbose,errormode_enum,
                                                  self.c_lib_path.encode("utf-8")
                                             )
@@ -1246,7 +1359,7 @@ class IntegralLibrary(object):
                                             epsrel, epsabs, maxeval,
                                             mineval, maxincreasefac, min_epsrel, min_epsabs,
                                             max_epsrel, max_epsabs, min_decrease_factor,
-                                            decrease_to_percentage, wall_clock_limit, 
+                                            decrease_to_percentage, wall_clock_limit,
                                             number_of_threads, reset_cuda_after, verbose,errormode_enum,
                                             self.c_lib_path.encode("utf-8")
                                     )
@@ -1322,11 +1435,15 @@ def _runlength_encode(values):
         result.append((repeat, prev_val))
     return result
 
+class DevNullWriter:
+    def write(self, s): pass
+    def flush(self): pass
+
 class DistevalLibrary(object):
     r'''
     Interface to the integration library produced by
     :func:`.make_package` or :func:`.loop_package` and built by
-    ``make disteval.done``.
+    ``make disteval``.
 
     :param specification_path:
         str;
@@ -1335,9 +1452,22 @@ class DistevalLibrary(object):
 
         .. code::
 
-            $ make disteval.done
+            $ make disteval
 
         in the root directory of the integration library.
+
+    :param workers:
+        list of string or list of list of string, optional;
+        List of commands that start pySecDec workers.
+        Default: one ``"nice python3 -m pySecDecContrib pysecdec_cpuworker"``
+        per available CPU, or one
+        ``"nice python3 -m pySecDecContrib pysecdec_cudaworker -d <i>"``
+        for each available GPU.
+
+    :param verbose:
+        bool, optional;
+        Print the set up and the integration log.
+        Default: ``True``.
 
     Instances of this class can be called with the
     following arguments:
@@ -1372,13 +1502,20 @@ class DistevalLibrary(object):
         float, optional;
         The desired relative accuracy for the numerical
         evaluation of the weighted sum of the sectors.
-        Default: epsrel of integrator (default 1e-4).
+        Default: ``1e-4``.
 
     :param epsabs:
         float, optional;
         The desired absolute accuracy for the numerical
         evaluation of the weighted sum of the sectors.
         Default: epsabs of integrator (default 1e-10).
+
+    :param timeout:
+        float, optional;
+        The maximal integration time (in seconds) after which
+        the integration will stop, and the current result will
+        be returned (no matter which precision is reached).
+        Default: ``None``.
 
     :param points:
         unsigned int, optional;
@@ -1390,10 +1527,16 @@ class DistevalLibrary(object):
         The number of shifts of the QMC lattice.
         Default: ``32``.
 
+    :param lattice_candidates:
+        unsigned int, optional;
+        The number of generating vector candidates used for median QMC rule.
+        lattice_candidates=0 disables the use of the median QMC rule.
+        Default: ``0``.
+
     :param verbose:
         bool, optional;
         Print the integration log.
-        Default: ``True``.
+        Default: whatever was used in the __init__() call.
 
     :param coefficients:
         string, optional;
@@ -1402,71 +1545,85 @@ class DistevalLibrary(object):
         Default: the ``coefficients/`` directory next to the
         specification file.
 
-    :param workers:
-        list of string or dict, optional;
-        List of commands that start pySecDec workers.
-        Default: one ``"nice python3 -m pySecDecContrib pysecdec_cpuworker"``
-        per available CPU, or one
-        ``"nice python3 -m pySecDecContrib pysecdec_cudaworker -d <i>"``
-        for each available GPU.
+    :param format:
+        string;
+        The format of the returned result, ``"sympy"``,
+        ``"mathematica"``, or ``"json"``. Default: ``"sympy"``.
 
     The call operator returns a single string with the resulting
     value as a series in the regulator powers.
     '''
 
-    def __init__(self, specification_path):
+    def __init__(self, specification_path, workers=None, verbose=True):
+        import asyncio
+        import sys
+        from . import disteval
+        # Normally this code is not supposed to be called from
+        # within an asyncio event loop, but e.g. Jupyter notebook
+        # kernel insists on starting it automatically, breaking
+        # any internal asyncio usage. See [1,2,3].
+        #
+        # The only solution at the moment is to patch asyncio to
+        # allow nested event loop execution via nest_asyncio.
+        #
+        # [1] https://github.com/jupyter/notebook/issues/3397
+        # [2] https://github.com/ipython/ipykernel/issues/548
+        # [3] https://github.com/python/cpython/issues/66435
+        import nest_asyncio; nest_asyncio.apply()
+        disteval.log_file = sys.stderr if verbose else DevNullWriter()
+        dirname = os.path.dirname(specification_path)
+        if workers is None:
+            workers = disteval.default_worker_commands(dirname)
         self.filename = specification_path
+        self.dirname = dirname
+        self.verbose = verbose
+        self.prepared = asyncio.run(disteval.prepare_eval(workers, dirname, specification_path))
 
     def __call__(self,
             parameters={}, real_parameters=[], complex_parameters=[],
-            epsabs=1e-10, epsrel=1e-4, points=1e4,
-            number_of_presamples=1e4, shifts=32, workers=None,
-            coefficients=None, verbose=True):
+            epsabs=1e-10, epsrel=1e-4, timeout=None, points=1e4,
+            number_of_presamples=1e4, shifts=32,
+            lattice_candidates=0, standard_lattices=False, 
+            coefficients=None, verbose=None, format="sympy"):
+        import asyncio
         import json
-        import subprocess
+        import math
         import sys
-        import tempfile
+        import time
+        from . import disteval
         if real_parameters or complex_parameters:
             with open(self.filename) as f:
                 spec = json.load(f)
             realp = spec["realp"]
             for i, val in enumerate(real_parameters):
-                parameters[realp[i]] = val
-            complexp = spec["realp"]
+                parameters[realp[i]] = float(val)
+            complexp = spec["complexp"]
             for i, val in enumerate(complex_parameters):
-                parameters[complexp[i]] = val
-        if workers is not None:
-            clusterfile = tempfile.NamedTemporaryFile(prefix="pSD.", suffix=".json", mode="w", encoding="utf8")
-            json.dump({"cluster": [
-                w if isinstance(w, dict) else {"count": 1, "command": str(w)}
-                for w in workers
-            ]}, clusterfile)
-            clusterfile.flush()
-            clusteropt = ("--cluster", clusterfile.name)
+                parameters[complexp[i]] = complex(val)
+        if not isinstance(epsabs, list) and not isinstance(epsabs, tuple):
+            epsabs = [epsabs]
+        if not isinstance(epsrel, list) and not isinstance(epsrel, tuple):
+            epsrel = [epsrel]
+        if coefficients is None:
+            coefficients = os.path.join(self.dirname, "coefficients")
+        deadline = math.inf if timeout is None else time.time() + timeout
+        if verbose is None: verbose = self.verbose
+        disteval.log_file = sys.stderr if verbose else DevNullWriter()
+        result = asyncio.run(disteval.do_eval(
+            self.prepared, coefficients, epsabs, epsrel,
+            int(number_of_presamples), int(points), int(shifts),
+            lattice_candidates, standard_lattices,
+            parameters, parameters, deadline))
+        if format == "sympy":
+            return disteval.result_to_sympy(result)
+        elif format == "mathematica":
+            return disteval.result_to_mathematica(result)
         else:
-            clusteropt = ()
-        if isinstance(epsabs, list):
-            epsabs = ",".join([
-                f"{v:.1e}" if n == 1 else f"{n}x{v:.1e}"
-                for n, v in _runlength_encode(epsabs)
-            ])
-        if isinstance(epsrel, list):
-            epsrel = ",".join([
-                f"{v:.1e}" if n == 1 else f"{n}x{v:.1e}"
-                for n, v in _runlength_encode(epsrel)
-            ])
-        output = subprocess.check_output([
-            sys.executable, "-m", "pySecDec.deval",
-                self.filename,
-                "--epsabs", str(epsabs),
-                "--epsrel", str(epsrel),
-                "--points", str(points),
-                "--presamples", str(number_of_presamples),
-                "--shifts", str(shifts),
-                *clusteropt,
-                *(["--coefficients", coefficients] if coefficients is not None else []),
-                *(f"{k}={v}" for k, v in parameters.values())
-            ],
-            encoding="utf8",
-            stderr=sys.stderr if verbose else subprocess.DEVNULL)
-        return output.strip()
+            result["sums"] = {
+                sum_name : {
+                    tuple(exp) : (complex(val_re, val_im), complex(err_re, err_im))
+                    for exp, (val_re, val_im), (err_re, err_im) in sum_terms
+                }
+                for sum_name, sum_terms in result["sums"].items()
+            }
+            return result

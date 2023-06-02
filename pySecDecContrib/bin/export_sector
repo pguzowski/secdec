@@ -261,9 +261,9 @@ integrand_return_t ${sorder}_integrand
 @@ for j, v in enumerate(getlist(i.order_integrationVariables)):
     auto ${v} = integration_variables[${j}];
 @@ for j, v in enumerate(getlist(i.realParameters)):
-    auto ${v} = real_parameters[${j}];
+    auto ${v} = real_parameters[${j}]; (void)${v};
 @@ for j, v in enumerate(getlist(i.complexParameters)):
-    auto ${v} = complex_parameters[${j}];
+    auto ${v} = complex_parameters[${j}]; (void)${v};
 @@ for j, v in enumerate(getlist(i.order_deformationParameters)):
     auto ${v} = deformation_parameters[${j}];
 @@ code = cleanup_code(i.order_integrandBody)
@@ -345,9 +345,9 @@ integrand_return_t ${sorder}_contour_deformation_polynomial
 @@ for j, v in enumerate(getlist(i.order_integrationVariables)):
     auto ${v} = integration_variables[${j}];
 @@ for j, v in enumerate(getlist(i.realParameters)):
-    auto ${v} = real_parameters[${j}];
+    auto ${v} = real_parameters[${j}]; (void)${v};
 @@ for j, v in enumerate(getlist(i.complexParameters)):
-    auto ${v} = complex_parameters[${j}];
+    auto ${v} = complex_parameters[${j}]; (void)${v};
 @@ for j, v in enumerate(getlist(i.order_deformationParameters)):
     auto ${v} = deformation_parameters[${j}];
 @@ code = cleanup_code(i.order_contourDeformationPolynomialBody)
@@ -389,9 +389,9 @@ void ${sorder}_maximal_allowed_deformation_parameters
 @@ for j, v in enumerate(getlist(i.order_integrationVariables)):
     auto ${v} = integration_variables[${j}];
 @@ for j, v in enumerate(getlist(i.realParameters)):
-    auto ${v} = real_parameters[${j}];
+    auto ${v} = real_parameters[${j}]; (void)${v};
 @@ for j, v in enumerate(getlist(i.complexParameters)):
-    auto ${v} = complex_parameters[${j}];
+    auto ${v} = complex_parameters[${j}]; (void)${v};
 @@ code = cleanup_code(i.order_optimizeDeformationParametersBody)
 @@ for line in code.splitlines():
     ${line}
@@ -439,9 +439,9 @@ ${i.namespace}__sector_${i.sector}_order_${i.order_name}(
 )
 {
 @@ for j, v in enumerate(getlist(i.realParameters)):
-    const real_t ${v} = realp[${j}];
+    const real_t ${v} = realp[${j}]; (void)${v};
 @@ for j, v in enumerate(getlist(i.complexParameters)):
-    const complex_t ${v} = complexp[${j}];
+    const complex_t ${v} = complexp[${j}]; (void)${v};
 @@ for j, v in enumerate(getlist(i.order_deformationParameters)):
     const real_t ${v} = deformp[${j}];
 @@ pass
@@ -461,13 +461,13 @@ ${i.namespace}__sector_${i.sector}_order_${i.order_name}(
         ${v} = warponce(${v} + shift[${j}], 1);
 @@ pass
 @@ for j, v in enumerate(intvars):
-        auto w_${v} = korobov3_w(${v});
+        auto w_${v} = ${i.qmcTransform}_w(${v});
 @@ pass
         realvec_t w = ${"*".join("w_" + v for v in intvars) if intvars else "REALVEC_CONST(1)"};
 @@ for k in range(1, VECSIZE):
         if (unlikely(index + ${k} >= index2)) w.x[${k}] = 0;
 @@ for j, v in enumerate(intvars):
-        ${v} = clamp01(korobov3_f(${v}));
+        ${v} = clamp01(${i.qmcTransform}_f(${v}));
 @@ for line in cleanup_code(i.order_integrandBody).splitlines():
         ${line.replace("return(", "acc = acc + w*(")}
 @@ pass
@@ -492,9 +492,9 @@ ${i.namespace}__sector_${i.sector}_order_${i.order_name}__maxdeformp(
 )
 {
 @@     for j, v in enumerate(getlist(i.realParameters)):
-    const real_t ${v} = realp[${j}];
+    const real_t ${v} = realp[${j}]; (void)${v};
 @@     for j, v in enumerate(getlist(i.complexParameters)):
-    const complex_t ${v} = complexp[${j}];
+    const complex_t ${v} = complexp[${j}]; (void)${v};
 @@     ndeformp = len(getlist(i.order_deformationParameters))
 @@     deformp_init = ', '.join(['REALVEC_CONST(10.0)']*ndeformp)
     const real_t invlattice = 1.0/lattice;
@@ -512,7 +512,7 @@ ${i.namespace}__sector_${i.sector}_order_${i.order_name}__maxdeformp(
         realvec_t ${v} = {{ ${li_list} }};
         ${v} = warponce(${v} + shift[${j}], 1);
 @@     for j, v in enumerate(intvars):
-        ${v} = clamp01(korobov3_f(${v}));
+        ${v} = clamp01(${i.qmcTransform}_f(${v}));
 @@     code = cleanup_code(i.order_optimizeDeformationParametersBody)
 @@     for line in code.splitlines():
         ${line}
@@ -536,9 +536,9 @@ ${i.namespace}__sector_${i.sector}_order_${i.order_name}__fpolycheck(
 )
 {
 @@     for j, v in enumerate(getlist(i.realParameters)):
-    const real_t ${v} = realp[${j}];
+    const real_t ${v} = realp[${j}]; (void)${v};
 @@     for j, v in enumerate(getlist(i.complexParameters)):
-    const complex_t ${v} = complexp[${j}];
+    const complex_t ${v} = complexp[${j}]; (void)${v};
 @@     for j, v in enumerate(getlist(i.order_deformationParameters)):
     const real_t ${v} = deformp[${j}];
 @@     pass
@@ -556,7 +556,7 @@ ${i.namespace}__sector_${i.sector}_order_${i.order_name}__fpolycheck(
         realvec_t ${v} = {{ ${li_list} }};
         ${v} = warponce(${v} + shift[${j}], 1);
 @@     for j, v in enumerate(intvars):
-        ${v} = clamp01(korobov3_f(${v}));
+        ${v} = clamp01(${i.qmcTransform}_f(${v}));
 @@     code = cleanup_code(i.order_contourDeformationPolynomialBody)
 @@     for line in code.splitlines():
         ${line.replace("return(", "auto fpoly_im = SecDecInternalImagPart(")}
@@ -592,9 +592,9 @@ ${i.namespace}__sector_${i.sector}_order_${i.order_name}(
     const uint64_t bid = blockIdx.x;
     const uint64_t tid = threadIdx.x;
 @@ for j, v in enumerate(getlist(i.realParameters)):
-    const real_t ${v} = realp[${j}];
+    const real_t ${v} = realp[${j}]; (void)${v};
 @@ for j, v in enumerate(getlist(i.complexParameters)):
-    const complex_t ${v} = complexp[${j}];
+    const complex_t ${v} = complexp[${j}]; (void)${v};
 @@ for j, v in enumerate(getlist(i.order_deformationParameters)):
     const real_t ${v} = deformp[${j}];
 @@ pass
@@ -610,11 +610,11 @@ ${i.namespace}__sector_${i.sector}_order_${i.order_name}(
         real_t ${v} = warponce(li_${v}*invlattice + shift[${j}], 1.0);
         li_${v} = warponce_i(li_${v} + genvec[${j}], lattice);
 @@ for j, v in enumerate(intvars):
-        real_t w_${v} = korobov3_w(${v});
+        real_t w_${v} = ${i.qmcTransform}_w(${v});
 @@ pass
         real_t w = ${"*".join("w_" + v for v in intvars) if intvars else "1"};
 @@ for j, v in enumerate(intvars):
-        ${v} = clamp01(korobov3_f(${v}));
+        ${v} = clamp01(${i.qmcTransform}_f(${v}));
 @@ for line in cleanup_code(i.order_integrandBody).splitlines():
         ${line.replace("return(", "val += w*(")}
 @@ pass

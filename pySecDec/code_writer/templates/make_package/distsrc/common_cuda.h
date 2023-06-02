@@ -1,4 +1,4 @@
-#pragma diag_suppress 177 // disable the "function was declared but never referenced" warning
+#pragma nv_diag_suppress 177 // disable the "function was declared but never referenced" warning
 
 #include <cinttypes>
 #include <cub/block/block_reduce.cuh>
@@ -45,16 +45,20 @@ mathfn real_t clamp01(const real_t &a)
 #define likely(x) __builtin_expect((x), 1)
 #define unlikely(x) __builtin_expect((x), 0)
 
-mathfn real_t korobov1_f(real_t x) { return x*x*((-2)*x + 3); }
-mathfn real_t korobov1_w(real_t x) { return (1 - x)*x*6; }
-mathfn real_t korobov2_f(real_t x) { return x*x*x*((6*x - 15)*x + 10); }
-mathfn real_t korobov2_w(real_t x) { auto xx = (1 - x)*x; return xx*xx*30; }
-mathfn real_t korobov3_f(real_t x) { auto xx = x*x; return xx*xx*((((-20)*x + 70)*x - 84)*x + 35); }
-mathfn real_t korobov3_w(real_t x) { auto xx = (1 - x)*x; return xx*xx*xx*140; }
-mathfn real_t korobov4_f(real_t x) { auto xx = x*x; return xx*xx*x*((((70*x - 315)*x + 540)*x - 420)*x + 126); }
-mathfn real_t korobov4_w(real_t x) { auto xx = (1 - x)*x; auto xx2 = xx*xx; return xx2*xx2*630; }
-mathfn real_t korobov5_f(real_t x) { auto x3 = x*x*x; return x3*x3*((((((-252)*x + 1386)*x - 3080)*x + 3465)*x - 1980)*x + 462); }
-mathfn real_t korobov5_w(real_t x) { auto xx = (1 - x)*x; auto xx2 = xx*xx; return xx2*xx2*xx*2772; }
+mathfn real_t none_f(real_t x) { return x; }
+mathfn real_t none_w(real_t x) { return 1; }
+mathfn real_t baker_f(real_t x) { auto a = 2*x; auto b = 2-a; return (a <= b) ? a : b; }
+mathfn real_t baker_w(real_t x) { return 1; }
+mathfn real_t korobov1x1_f(real_t x) { return x*x*((-2)*x + 3); }
+mathfn real_t korobov1x1_w(real_t x) { return (1 - x)*x*6; }
+mathfn real_t korobov2x2_f(real_t x) { return x*x*x*((6*x - 15)*x + 10); }
+mathfn real_t korobov2x2_w(real_t x) { auto xx = (1 - x)*x; return xx*xx*30; }
+mathfn real_t korobov3x3_f(real_t x) { auto xx = x*x; return xx*xx*((((-20)*x + 70)*x - 84)*x + 35); }
+mathfn real_t korobov3x3_w(real_t x) { auto xx = (1 - x)*x; return xx*xx*xx*140; }
+mathfn real_t korobov4x4_f(real_t x) { auto xx = x*x; return xx*xx*x*((((70*x - 315)*x + 540)*x - 420)*x + 126); }
+mathfn real_t korobov4x4_w(real_t x) { auto xx = (1 - x)*x; auto xx2 = xx*xx; return xx2*xx2*630; }
+mathfn real_t korobov5x5_f(real_t x) { auto x3 = x*x*x; return x3*x3*((((((-252)*x + 1386)*x - 3080)*x + 3465)*x - 1980)*x + 462); }
+mathfn real_t korobov5x5_w(real_t x) { auto xx = (1 - x)*x; auto xx2 = xx*xx; return xx2*xx2*xx*2772; }
 
 mathfn uint64_t mulmod(uint64_t a, uint64_t b, uint64_t k) {
     // assume 0 <= a,b <= k < 2^53

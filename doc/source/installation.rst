@@ -1,10 +1,25 @@
 Installation
 ============
 
+Obtain a Compiler
+-----------------
+
+`pySecDec` works on Unix-like systems, specifically Linux and macOS. It requires a working c++ compiler and a Python 3 (>=3.8) installation.
+
+On Linux systems, users can install compilers (we recommend the latest GCC or Clang compiler) and Python 3 using the package manager provided with their Linux distribution (usually one of : `apk`, `apt-get`, `apt`, `yum`).
+
+On macOS systems, users can install a compiler via the App Store:
+
+* Download `Xcode` via the App Store
+* Open a terminal window and enter :code:`xcode-select --install` then follow the prompts to install command line tools.
+
+This procedure will make the `clang` compiler available on the system. Python 3 is shipped with macOS, you can check the version available on your system using :code:`python3 --version`. Later versions of Python can be installed on macOS using third-party package managers (e.g. the Homebrew package manager).
+
+
 Download the Program and Install
 --------------------------------
 
-`pySecDec` works under Python version 3.6 or newer on
+`pySecDec` works under Python version 3.8 or newer on
 unix-like systems.  The latest release can be installed from
 `PyPI`_ by first (optionally) upgrading `pip`_:
 
@@ -17,6 +32,15 @@ and then running:
 .. code::
 
    $ python3 -m pip install --user --upgrade pySecDec
+
+This command will install the prebuild version of `pySecDec` if it
+is available; if not, then the dependencies will be compiled from
+source (this might take a while). One can also force building
+from source like this:
+
+.. code::
+
+   $ python3 -m pip install --user --upgrade --no-binary :all: pySecDec
 
 .. _PyPI: https://pypi.org/project/pySecDec/
 .. _pip: https://pypi.org/project/pip/
@@ -37,36 +61,18 @@ http://www.graphviz.org.
 
 .. _additional_cpp_dependencies:
 
-Additional Dependencies for Generated c++ Packages
---------------------------------------------------
+Additional Dependencies
+-----------------------
 
-.. note::
-    The following packages are redistributed with the `pySecDec` tarball; i.e. you don't have 
-    to install any of them yourself.
+`pySecDec` and the integration libraries it produces depend
+on multiple third-party non-Python packages, all of which are
+contained in `pySecDecContrib` and will be automatally built
+during the normal installation procedure. These packages are:
 
-The intended main usage of `pySecDec` is to make it write c++ packages using the functions
-:func:`pySecDec.code_writer.make_package` and :func:`pySecDec.loop_integral.loop_package`.
-In order to build these c++ packages, the following additional non-python-based libraries
-and programs are used:
-
- * CUBA (http://www.feynarts.de/cuba/)
- * QMC (https://github.com/mppmu/qmc)
- * FORM (http://www.nikhef.nl/~form/)
- * SecDecUtil (part of `pySecDec`, see :ref:`SedDecUtil<chapter_secdecutil>`), depends on:
-
-   * catch (https://github.com/philsquared/Catch)
-   * gsl (http://www.gnu.org/software/gsl/)
-
-The functions :func:`pySecDec.code_writer.make_package` and :func:`pySecDec.loop_integral.loop_package`
-can use the external program `nauty` [MP+14]_ to find all sector symmetries and therefore reduce the number of
-sectors:
-
- * NAUTY (http://pallini.di.uniroma1.it/)
-
-The :mod:`geometric decomposition <pySecDec.decomposition.geometric>`
-module depends on the `normaliz` [BIR]_ command line executable:
-
- * Normaliz (https://www.normaliz.uni-osnabrueck.de)
-
-These packages are redistributed along with pySecDec itself,
-and will be built automatically during pySecDec installation.
+ * QMC (https://github.com/mppmu/qmc), used for the :mod:`Qmc<pySecDec.integral_interface.Qmc>` integrator.
+ * CUBA (http://www.feynarts.de/cuba/), used for :mod:`Vegas<pySecDec.integral_interface.Vegas>`, :mod:`Suave<pySecDec.integral_interface.Suave>`, :mod:`Divonne<pySecDec.integral_interface.Divonne>`, and :mod:`Cuhre<pySecDec.integral_interface.Cuhre>` integrators.
+ * GSL (http://www.gnu.org/software/gsl/), used for the :mod:`CQuad<pySecDec.integral_interface.CQuad>` integrator.
+ * FORM (http://www.nikhef.nl/~form/), used to optimize the integrands.
+ * Nauty and Traces (http://pallini.di.uniroma1.it/), used by :func:`pySecDec.make_package` to find symmetries between sectors (if `use_dreadnaut` is set to `True`).
+ * Normaliz (https://www.normaliz.uni-osnabrueck.de), used by the :mod:`geometric decomposition <pySecDec.decomposition.geometric>` module.
+ * Catch (https://github.com/philsquared/Catch) used by :ref:`SedDecUtil<chapter_secdecutil>` for unit testing.
