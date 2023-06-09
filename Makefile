@@ -75,8 +75,8 @@ clean:
 
 .PHONY: dependencies
 dependencies:
-	$(PYTHON) -m pip install --user toml
-	$(PYTHON) -m pip install --user $$($(PYTHON) -c 'import toml; m = toml.load("pyproject.toml"); print(" ".join(m["build-system"]["requires"] + m["project"]["dependencies"] + sum(m["project"]["optional-dependencies"].values(), [])));')
+	$(PYTHON) -m pip install toml
+	$(PYTHON) -m pip install $$($(PYTHON) -c 'import toml; m = toml.load("pyproject.toml"); print(" ".join(m["build-system"]["requires"] + m["project"]["dependencies"] + sum(m["project"]["optional-dependencies"].values(), [])));')
 
 .PHONY: build
 build:
