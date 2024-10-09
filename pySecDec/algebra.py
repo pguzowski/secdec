@@ -271,7 +271,7 @@ class Function(_Expression):
 
         :param index:
             integer;
-            The index of the paramater to derive by.
+            The index of the parameter to derive by.
 
         '''
         derivative = self.derivatives[index]
@@ -513,7 +513,7 @@ class Polynomial(_Expression):
 
         :param index:
             integer;
-            The index of the paramater to derive by.
+            The index of the parameter to derive by.
 
         '''
         # derivative by ``x`` --> have ``x`` coded in ``expolist`` and can have ``x`` in coeffs
@@ -561,16 +561,16 @@ class Polynomial(_Expression):
         return self.polysymbols
 
     def __add__(self, other):
-        'addition operator'
+        'Addition operator'
         return self._sub_or_add(other, False)
     __radd__ = __add__
 
     def __sub__(self, other):
-        'subtraction operator'
+        'Subtraction operator'
         return self._sub_or_add(other, True)
 
-    def __rsub__(self,other):
-        'other - self'
+    def __rsub__(self, other):
+        'Return other - self'
         return (-self) + other
 
     def _sub_or_add(self, other, sub):
@@ -581,7 +581,7 @@ class Polynomial(_Expression):
 
         '''
         if  type(other) is Polynomial:
-            assert self.number_of_variables == other.number_of_variables, 'Number of varibales must be equal for both polynomials in +'
+            assert self.number_of_variables == other.number_of_variables, 'Number of variables must be equal for both polynomials in +'
 
             sum_expolist = np.vstack([self.expolist, other.expolist])
             sum_coeffs = np.hstack([self.coeffs, -other.coeffs if sub else other.coeffs])
@@ -597,9 +597,9 @@ class Polynomial(_Expression):
             return NotImplemented
 
     def __mul__(self, other):
-        'multiplication operator'
+        'Multiplication operator'
         if  type(other) is Polynomial:
-            assert self.number_of_variables == other.number_of_variables, 'Number of varibales must be equal for both factors in *'
+            assert self.number_of_variables == other.number_of_variables, 'Number of variables must be equal for both factors in *'
 
             product_expolist = np.vstack([other.expolist + term for term in self.expolist])
             product_coeffs = np.hstack([other.coeffs * term for term in self.coeffs])
@@ -620,7 +620,7 @@ class Polynomial(_Expression):
     __rmul__ = __mul__
 
     def __neg__(self):
-        'arithmetic negation "-self"'
+        'Arithmetic negation "-self"'
         return Polynomial(self.expolist.copy(), -self.coeffs, self.polysymbols, copy=False)
 
     def __pow__(self, exponent):
@@ -767,9 +767,9 @@ class Polynomial(_Expression):
         return prod
 
     def denest(self):
-        """
+        r"""
         Returns a flattened version of a nested :class:`.Polynomial`
-        of :class:`.Polynomial`s.
+        of :class:`.Polynomial`\s.
         """
         expolist = []
         coeffs = []
@@ -858,7 +858,7 @@ class ExponentiatedPolynomial(Polynomial):
 
         :param index:
             integer;
-            The index of the paramater to derive by.
+            The index of the parameter to derive by.
 
         '''
         # derive an expression of the form "poly**exponent"
@@ -1025,7 +1025,7 @@ class LogOfPolynomial(Polynomial):
 
         :param index:
             integer;
-            The index of the paramater to derive by.
+            The index of the parameter to derive by.
 
         '''
         # derive an expression of the form "log(poly)"
@@ -1161,7 +1161,7 @@ class Sum(_Expression):
 
         :param index:
             integer;
-            The index of the paramater to derive by.
+            The index of the parameter to derive by.
 
         '''
         # derivative(p1 + p2 + ...) = derivative(p1) + derivative(p2) + ...
@@ -1283,7 +1283,7 @@ class Product(_Expression):
 
         :param index:
             integer;
-            The index of the paramater to derive by.
+            The index of the parameter to derive by.
 
         '''
         return ProductRule(*self.factors, copy=False).derive(index)
@@ -1362,7 +1362,7 @@ class ProductRule(_Expression):
             # The `factorlist` is a 3 dimensional array. Its first
             # index denotes the terms of the sum :math:`i`. The
             # second index denotes the factor :math:`j`. The last
-            # index denotes the varible to take the derivative with
+            # index denotes the variable to take the derivative with
             # respect to. The value of ``factorlist[i,j,k]`` denotes
             # how many derivatives :math:`n_{ijk}` are to be taken.
             # If not given, a product of the `expressions` without
@@ -1403,7 +1403,7 @@ class ProductRule(_Expression):
 
         :param index:
             integer;
-            The index of the paramater to derive by.
+            The index of the parameter to derive by.
 
         '''
         # product rule: derivative(<coeff> * x**k) = <coeff> * k * x**(k-1) + derivative(<coeff>) * x**k
@@ -1431,7 +1431,7 @@ class ProductRule(_Expression):
                     lower_derivative_multiindex = tuple(lower_derivative_multiindex)
                     lower_derivative = expression[lower_derivative_multiindex]
                     expression[derivative_multiindex] = lower_derivative.derive(index).simplify() # automatically simplify cache
-                # set the coefficent to zero if the derivative is zero, so that it doesn't get outputted in str()
+                # set the coefficient to zero if the derivative is zero, so that it doesn't get outputted in str()
                 if new_coeffs[n] != 0 and isinstance(expression[derivative_multiindex], Polynomial) and not np.any(expression[derivative_multiindex].expolist):
                     if sympify_expression(expression[derivative_multiindex]).simplify() == 0:
                         new_coeffs[n] = 0
@@ -1472,7 +1472,8 @@ class ProductRule(_Expression):
                 self.coeffs[0] = 0
 
         for i in range(1,len(self.coeffs)):
-            if self.coeffs[i] == 0: continue
+            if self.coeffs[i] == 0:
+                continue
             previous_term = self.factorlist[i-1]
             # search `self.factorlist` for the same term
             # since `self.factorlist` is sorted, must only compare with the previous term
@@ -1606,7 +1607,7 @@ class Pow(_Expression):
 
         :param index:
             integer;
-            The index of the paramater to derive by.
+            The index of the parameter to derive by.
 
         '''
         # derive an expression of the form "base**exponent"
@@ -1697,7 +1698,7 @@ class Log(_Expression):
 
         :param index:
             integer;
-            The index of the paramater to derive by.
+            The index of the parameter to derive by.
 
         '''
         # derivative(log(arg)) = 1/arg * derivative(arg) = arg**-1 * derivative(arg)
@@ -1709,6 +1710,70 @@ class Log(_Expression):
     @doc(_Expression.docstring_of_replace)
     def replace(expression, index, value, remove=False):
         return Log( expression.arg.replace(index,value,remove) , copy=False )
+
+class Exp(_Expression):
+    r'''
+    The real valued exponential function.
+    Store the expressions ``exp(arg)``.
+
+    :param arg:
+        :class:`._Expression`;
+        The argument of the exponential function.
+
+    :param copy:
+        bool;
+        Whether or not to copy the `arg`.
+
+    '''
+    def __init__(self, arg, copy=True):
+        self.number_of_variables = arg.number_of_variables
+        self.arg = arg.copy() if copy else arg
+
+    @cached_property
+    def str(self):
+        return 'exp(' + str(self.arg) + ')'
+
+    def __repr__(self):
+        return self.str
+
+    __str__ = __repr__
+
+    def copy(self):
+        "Return a copy of a :class:`.Exp`."
+        return Exp(self.arg.copy(), copy=False)
+
+    def simplify(self):
+        'Apply ``exp(0) = 1``.'
+        if self.simplified:
+            return self
+
+        self.clear_cache()
+
+        self.arg = self.arg.simplify()
+        if type(self.arg) is Polynomial and len(self.arg.coeffs) == 1 and self.arg.coeffs[0] == 0 and (self.arg.expolist == 0).all():
+            return Polynomial(np.zeros([1,len(self.arg.polysymbols)], dtype=int), np.array([1]), self.arg.polysymbols, copy=False)
+        else:
+            self.simplified = True
+            return self
+
+    @property
+    def symbols(self):
+        return self.arg.symbols
+
+    def derive(self, index):
+        '''
+        Generate the derivative by the parameter indexed `index`.
+
+        :param index:
+            integer;
+            The index of the parameter to derive by.
+
+        '''
+        return Product(self, self.arg.derive(index), copy=False)
+
+    @doc(_Expression.docstring_of_replace)
+    def replace(expression, index, value, remove=False):
+        return Exp( expression.arg.replace(index,value,remove) , copy=False )
 
 def Expression(expression, polysymbols, follow_functions=False):
     '''
@@ -1769,6 +1834,10 @@ def Expression(expression, polysymbols, follow_functions=False):
                     return LogOfPolynomial.from_expression(expression.args[0], polysymbols)
                 except:
                     return Log(recursive_call(expression.args[0]))
+
+            if isinstance(expression, sp.exp):
+                assert len(expression.args) == 1
+                return Exp(recursive_call(expression.args[0]))
 
             if expression.is_Function:
                 func = Function(expression.__class__.__name__, *(recursive_call(e) for e in expression.args))

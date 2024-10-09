@@ -1,6 +1,6 @@
-from ..metadata import version, git_id
+from ..metadata import git_id
 from .template_parser import validate_pylink_qmc_transforms, generate_pylink_qmc_macro_dict, parse_template_file, parse_template_tree
-from ..misc import sympify_symbols, make_cpp_list, chunks
+from ..misc import sympify_symbols, make_cpp_list, chunks, version
 from .make_package import make_package
 import pySecDecContrib
 
@@ -15,6 +15,10 @@ import subprocess
 import sympy as sp
 import sys
 import tempfile
+
+ginsh_constant_names = {
+    "Pi", "Euler", "Catalan", "FAIL", "I", "Digits"
+}
 
 class Coefficient(object):
     r'''
@@ -34,7 +38,7 @@ class Coefficient(object):
         iterable of strings or sympy symbols;
         The symbols other parameters.
 
-        '''
+    '''
     def __init__(self, numerators, denominators=(), parameters=()):
         if not np.iterable(parameters):
             raise ValueError("parameters must be iterable")
@@ -77,11 +81,11 @@ class Coefficient(object):
                 f.write(self.expression)
                 f.write("):\n")
                 # Is the whole expression zero?
-                f.write("is(subs(__EXPR,{");
+                f.write("is(subs(__EXPR,{")
                 f.write(",".join(f"{reg}=={rand}" for reg, rand in zip(regulators, rregs)))
                 f.write("})==0);\n")
                 for i, reg in enumerate(regulators):
-                    f.write("__EXPRi=subs(__EXPR,{");
+                    f.write("__EXPRi=subs(__EXPR,{")
                     f.write(",".join(
                             f"{reg}=={rregs[j]}"
                             for j, reg in enumerate(regulators)
@@ -120,7 +124,7 @@ class Coefficient(object):
     @staticmethod
     def from_string(expression, exclude_parameters=()):
         expression = expression.replace("**", "^")
-        parameters = sorted(list(set(re.findall("[a-zA-Z_][a-zA-Z_0-9]*", expression)) - set(exclude_parameters)))
+        parameters = sorted(list(set(re.findall("[a-zA-Z_][a-zA-Z_0-9]*", expression)) - set(exclude_parameters) - ginsh_constant_names))
         return Coefficient(expression, parameters=parameters)
 
 def _generate_one_term(gen_index, sums, complex_parameters, name, package_generator, pylink_qmc_transforms, real_parameters, regulators, replacements_in_files, requested_orders, template_sources):
@@ -180,14 +184,14 @@ def sum_package(name, package_generators, regulators, requested_orders,
     .. math::
         \sum_j c_{ij} \ \int f_j
 
-    Generate a c++ package with an optmized algorithm to
+    Generate a c++ package with an optimized algorithm to
     evaluate the integrals numerically. It writes the names
     of the integrals in the file `"integral_names.txt"`.
     For the format of the file see :class:`~pySecDec.amplitude_interface.Parser`.
 
     :param name:
         string;
-        The name of the c++ namepace and the output
+        The name of the c++ namespace and the output
         directory.
 
     :param package_generators:
@@ -195,7 +199,7 @@ def sum_package(name, package_generators, regulators, requested_orders,
         `pySecDec.loop_integral.LoopPackage` `namedtuples`;
         The generator functions for the integrals
         :math:`\int f_i`
-        
+
         .. note::
             The `pySecDec.code_writer.MakePackage` and
             `pySecDec.loop_integral.LoopPackage` objects
@@ -242,7 +246,7 @@ def sum_package(name, package_generators, regulators, requested_orders,
         * ``sidi<i>`` for 1 <= i <= 6
 
         Default: ``['korobov3x3']``
-    
+
     :param processes:
         integer or None, optional;
         Parallelize the generation of terms in a sum using this
@@ -283,7 +287,7 @@ def sum_package(name, package_generators, regulators, requested_orders,
             if isinstance(c_i, dict):
                 for genidx in c_i.keys():
                     if not (0 <= genidx < len(package_generators)):
-                        raise ValueError(f"coefficient for generator {genidx} is provided, but there are only {len(pacakge_generators)}")
+                        raise ValueError(f"coefficient for generator {genidx} is provided, but there are only {len(package_generators)}")
             else:
                 if len(c_i) != len(package_generators):
                     raise ValueError(f"`coefficients` must have list of the same length as `package_generators`.")
@@ -304,7 +308,7 @@ def sum_package(name, package_generators, regulators, requested_orders,
             if isinstance(c_i, dict):
                 for genidx in c_i.keys():
                     if not (0 <= genidx < len(package_generators)):
-                        raise ValueError(f"coefficient for generator {genidx} is provided, but there are only {len(pacakge_generators)}")
+                        raise ValueError(f"coefficient for generator {genidx} is provided, but there are only {len(package_generators)}")
             else:
                 if len(c_i) != len(package_generators):
                     raise ValueError(f"`coefficients` must have list of the same length as `package_generators`.")
@@ -519,7 +523,8 @@ def sum_package(name, package_generators, regulators, requested_orders,
                     if sumidx in coeffs_lo
                 ]
                 for sumidx, sum_name in enumerate(sums.keys())
-            }
+            },
+            "generated_by": version
         }, f, indent=2)
     # Return template replacements of last integral processed (for 1 integral case this emulates what code_writer.make_package does)
     return template_replacements[-1][2]

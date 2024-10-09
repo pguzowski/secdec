@@ -14,7 +14,7 @@ def make_package(name, integration_variables, regulators, requested_orders,
                  complex_parameters=[], form_optimization_level=2, form_work_space='50M',
                  form_memory_use=None, form_threads=1,
                  form_insertion_depth=5, contour_deformation_polynomial=None, positive_polynomials=[],
-                 decomposition_method='iterative_no_primary', normaliz_executable=None,
+                 decomposition_method='geometric_no_primary', normaliz_executable=None,
                  enforce_complex=False, split=False, ibp_power_goal=-1, use_iterative_sort=True,
                  use_light_Pak=True, use_dreadnaut=False, use_Pak=True, processes=None, form_executable=None,
                  pylink_qmc_transforms=['korobov3x3']):
@@ -36,13 +36,13 @@ def make_package(name, integration_variables, regulators, requested_orders,
 
     :param name:
         string;
-        The name of the c++ namepace and the output
+        The name of the c++ namespace and the output
         directory.
 
     :param integration_variables:
         iterable of strings or sympy symbols;
         The variables that are to be integrated. The
-        intgration region depends on the chosen
+        integration region depends on the chosen
         `decomposition_method`.
 
     :param regulators:
@@ -114,7 +114,7 @@ def make_package(name, integration_variables, regulators, requested_orders,
 
     :param functions:
         iterable of strings or sympy symbols, optional;
-        Function symbols occuring in `remainder_expression`,
+        Function symbols occurring in `remainder_expression`,
         e.g.``['f']``.
 
         .. note::
@@ -201,9 +201,9 @@ def make_package(name, integration_variables, regulators, requested_orders,
         The strategy to decompose the polynomials. The
         following strategies are available:
 
-        * 'iterative_no_primary' (default): integration region
+        * 'iterative_no_primary': integration region
           :math:`[0,1]^N`.
-        * 'geometric_no_primary': integration region :math:`[0,1]^N`.
+        * 'geometric_no_primary' (default): integration region :math:`[0,1]^N`.
         * 'geometric_infinity_no_primary': integration region
           :math:`[0,\infty]^N`.
         * 'iterative': primary decomposition followed by
@@ -214,9 +214,11 @@ def make_package(name, integration_variables, regulators, requested_orders,
           integration over :math:`[0,1]^{N-1}`.
 
         'iterative', 'geometric', and 'geometric_ku' are only
-        valid for loop integrals. An end user should use
+        valid for loop integrals. The functions
         'iterative_no_primary', 'geometric_no_primary', or
-        'geometric_infinity_no_primary' here.
+        'geometric_infinity_no_primary' should be used when
+        decomposing a function with no overall Dirac delta
+        function.
         In order to compute loop integrals, please use the
         function :func:`pySecDec.loop_integral.loop_package`.
 
@@ -316,7 +318,7 @@ def make_package(name, integration_variables, regulators, requested_orders,
 
     :param form_executable:
         string or None, optional;
-        The path to the form exectuable. The argument is passed
+        The path to the form executable. The argument is passed
         to :meth:`.Coefficient.process`. If ``None``, then either
         ``$FORM``, ``$SECDEC_CONTRIB/bin/form``, or just ``form``
         is used, depending on which environment variable is set.
@@ -335,7 +337,6 @@ def make_package(name, integration_variables, regulators, requested_orders,
         `New in version 1.5`.
         Default: ``['korobov3x3']``
     '''
-
     # Build generators_args
     generators_args = \
     {

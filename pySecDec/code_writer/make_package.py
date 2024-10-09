@@ -4,8 +4,8 @@ This module implements the main program - the function
 
 """
 
-from ..metadata import version, git_id
-from ..misc import sympify_symbols, rangecomb, make_cpp_list, chunks
+from ..metadata import git_id
+from ..misc import sympify_symbols, rangecomb, make_cpp_list, chunks, version
 from ..algebra import _Expression, Expression, Polynomial, \
                       ExponentiatedPolynomial, Pow, Product, \
                       ProductRule, Function, Sum, sympify_expression
@@ -110,17 +110,18 @@ def _parse_expressions(expressions, polysymbols, target_type, name_of_make_argum
 
 def _validate(name, allow_underscore=False):
     '''
-    Check validity of `name` for usage in FORM,
-    c++, and the file system. If `allow_underscore`
-    is True the underscores are allowed.
+    Check validity of ``name`` for usage in FORM,
+    c++, and the file system. If ``allow_underscore``
+    is ``True`` the underscores are allowed.
+
     Restrictions are as follows:
-     o FORM: no underscores
-     o FORM, c++: the first character must be
-       in [A-Z, a-z]; i.e. no leading numbers
-     o all: no special characters; i.e. only
-       characters from the set [A-Z, a-z, 0-9]
-     o `name` must not begin with the internal
-       prefix
+
+    - FORM: no underscores
+    - FORM, c++: the first character must be
+      in [A-Z, a-z]; i.e. no leading numbers
+    - all: no special characters; i.e. only
+      characters from the set [A-Z, a-z, 0-9]
+    - ``name`` must not begin with the internal prefix
 
     '''
     if match(r'^[A-Z,a-z,_]+[A-Z,a-z,0-9,_]*$', name) is None:
@@ -175,7 +176,6 @@ def _convert_input(name, integration_variables, ibp_power_goal, regulators,
                    form_work_space, form_memory_use, form_threads, form_insertion_depth,
                    contour_deformation_polynomial, positive_polynomials, decomposition_method, pylink_qmc_transforms):
     'Get the data types right.'
-
     # parse symbols
     integration_variables = sympify_symbols(list(integration_variables), 'All `integration_variables` must be symbols.')
     regulators = sympify_symbols(list(regulators), 'All `regulators` must be symbols.')
@@ -183,7 +183,9 @@ def _convert_input(name, integration_variables, ibp_power_goal, regulators,
     positive_polynomials = sympify_symbols(list(positive_polynomials), 'All `positive_polynomials` must be symbols.')
     real_parameters= sympify_symbols(list(real_parameters), 'All `real_parameters` must be symbols.')
     complex_parameters = sympify_symbols(list(complex_parameters), 'All `complex_parameters` must be symbols.')
-    functions = list(functions); sympify_symbols(functions, 'All `functions` must be symbols.'); functions = set(str(f) for f in functions)
+    functions = list(functions)
+    sympify_symbols(functions, 'All `functions` must be symbols.')
+    functions = set(str(f) for f in functions)
     if contour_deformation_polynomial is not None:
         contour_deformation_polynomial = sympify_symbols([contour_deformation_polynomial], '`contour_deformation_polynomial` must be a symbol.')[0]
 
@@ -605,6 +607,16 @@ def _make_sector_distsrc_files(sector_order_names):
             [f"distsrc/sector_{s}_{o}.cu" for s, o in orders]
     return " \\\n\t".join(files)
 
+def _make_sector_mma_files(sector_order_names):
+    """
+    Produce a Makefile-formatted list of source files that
+    export_sector will produce for a given sector for the
+    Mathematica output.
+    """
+    orders = sector_order_names.values()
+    files = [f"mma/sector_{s}_{o}.m" for s, o in orders]
+    return " \\\n\t".join(files)
+
 def _derivative_muliindex_to_name(basename, multiindex):
     '''
     Convert a derivative multiindex as returned by
@@ -727,7 +739,7 @@ class MaxDegreeFunction(Function):
 
             :param index:
                 integer;
-                The index of the paramater to derive by.
+                The index of the parameter to derive by.
 
             '''
             derivative = self.derivatives[index]
@@ -795,7 +807,6 @@ class MaxDegreeFunction(Function):
 
 def _make_environment(original_environment):
     'Prepare the environment for :func:`._process_secondary_sector`.'
-
     original_environment = original_environment.copy()
     sector_index = original_environment.pop('sector_index')
     secondary_sectors = original_environment.pop('secondary_sectors')
@@ -818,7 +829,6 @@ def _make_environment(original_environment):
 
 def _process_secondary_sector(environment):
     'Function to process the `secondary_sectors` in parallel.'
-
     # read environment
     sector_index = environment['sector_index']
     sector = environment['sector']
@@ -1135,7 +1145,7 @@ def _process_secondary_sector(environment):
     for item in after_ibp:
         subtracted.extend(  integrate_pole_part(item, *integration_variable_indices)  )
 
-    # intialize expansion
+    # initialize expansion
     pole_parts = [s.factors[1].simplify() for s in subtracted]
     regular_parts = [Product( *([s.factors[0]] + s.factors[2:]), copy=False ) for s in subtracted]
 
@@ -1348,7 +1358,7 @@ def _process_secondary_sector(environment):
         for name in ordered_decomposed_derivative_names
     )
 
-    # generate list over all occuring orders in the regulators
+    # generate list over all occurring orders in the regulators
     regulator_powers = list( rangecomb(np.zeros_like(required_orders), required_orders + highest_poles_current_sector) )
     number_of_orders = len(regulator_powers)
 
@@ -1356,6 +1366,7 @@ def _process_secondary_sector(environment):
     sector_order_names = _make_sector_order_names(sector_index, regulator_powers, highest_poles_current_sector)
     sector_cpp_files = _make_sector_cpp_files(sector_index, sector_order_names, contour_deformation_polynomial is not None)
     sector_distsrc_files = _make_sector_distsrc_files(sector_order_names)
+    sector_mma_files = _make_sector_mma_files(sector_order_names)
     regulator_powers = _make_FORM_shifted_orders(regulator_powers)
 
     # parse template file "sector.h"
@@ -1374,6 +1385,7 @@ def _process_secondary_sector(environment):
     template_replacements['sector_cpp_files'] = sector_cpp_files
     template_replacements['sector_hpp_files'] = sector_cpp_files.replace(".cpp", ".hpp")
     template_replacements['sector_distsrc_files'] = sector_distsrc_files
+    template_replacements['sector_mma_files'] = sector_mma_files
     template_replacements['sector_codegen_sources'] = \
             "codegen/sector%i.h" % sector_index if contour_deformation_polynomial is None else \
             "codegen/sector%i.h codegen/contour_deformation_sector%i.h" % (sector_index, sector_index)
@@ -1386,7 +1398,7 @@ def _process_secondary_sector(environment):
                         template_replacements)
     for key in 'functions', 'cal_I_derivatives', 'decomposed_polynomial_derivatives','insert_cal_I_procedure','insert_other_procedure','insert_decomposed_procedure', \
             'integrand_definition_procedure','highest_regulator_poles','required_orders','regulator_powers','number_of_orders', \
-            'sector_index', 'sector_cpp_files', 'sector_hpp_files', 'sector_distsrc_files', 'sector_codegen_sources':
+            'sector_index', 'sector_cpp_files', 'sector_hpp_files', 'sector_distsrc_files', 'sector_mma_files', 'sector_codegen_sources':
         del template_replacements[key]
 
     if contour_deformation_polynomial is not None:
@@ -1438,7 +1450,7 @@ def make_package(name, integration_variables, regulators, requested_orders,
                  complex_parameters=[], form_optimization_level=2, form_work_space='50M',
                  form_memory_use=None, form_threads=1,
                  form_insertion_depth=5, contour_deformation_polynomial=None, positive_polynomials=[],
-                 decomposition_method='iterative_no_primary', normaliz_executable=None,
+                 decomposition_method='geometric_no_primary', normaliz_executable=None,
                  enforce_complex=False, split=False, ibp_power_goal=-1, use_iterative_sort=True,
                  use_light_Pak=True, use_dreadnaut=False, use_Pak=True, processes=None, pylink_qmc_transforms=['korobov3x3']):
     r'''
@@ -1456,13 +1468,13 @@ def make_package(name, integration_variables, regulators, requested_orders,
 
     :param name:
         string;
-        The name of the c++ namepace and the output
+        The name of the c++ namespace and the output
         directory.
 
     :param integration_variables:
         iterable of strings or sympy symbols;
         The variables that are to be integrated. The
-        intgration region depends on the chosen
+        integration region depends on the chosen
         `decomposition_method`.
 
     :param regulators:
@@ -1534,7 +1546,7 @@ def make_package(name, integration_variables, regulators, requested_orders,
 
     :param functions:
         iterable of strings or sympy symbols, optional;
-        Function symbols occuring in `remainder_expression`,
+        Function symbols occurring in `remainder_expression`,
         e.g.``['f']``.
 
         .. note::
@@ -1621,9 +1633,9 @@ def make_package(name, integration_variables, regulators, requested_orders,
         The strategy to decompose the polynomials. The
         following strategies are available:
 
-        * 'iterative_no_primary' (default): integration region
+        * 'iterative_no_primary': integration region
           :math:`[0,1]^N`.
-        * 'geometric_no_primary': integration region :math:`[0,1]^N`.
+        * 'geometric_no_primary'(default): integration region :math:`[0,1]^N`.
         * 'geometric_infinity_no_primary': integration region
           :math:`[0,\infty]^N`.
         * 'iterative': primary decomposition followed by
@@ -1818,7 +1830,7 @@ def make_package(name, integration_variables, regulators, requested_orders,
     # make a copy of the `integration_variables` for later reference
     all_integration_variables = list(integration_variables)
 
-    # intialize the c++ declarations of the `functions`
+    # initialize the c++ declarations of the `functions`
     function_declarations = set()
 
     have_dummy_functions = True if functions else False
@@ -2083,7 +2095,6 @@ def make_package(name, integration_variables, regulators, requested_orders,
                 if var not in integration_variables:
                     this_primary_sector_remainder_expression = this_primary_sector_remainder_expression.replace(i,1,remove=True)
                     break
-
             if use_symmetries and not split:
                 # search for symmetries throughout the secondary decomposition
                 indices = range(len(integration_variables))
@@ -2250,7 +2261,8 @@ def make_package(name, integration_variables, regulators, requested_orders,
                     "kernels": [f"sector_{s}_order_{o}" for s, o in order_names]
                 }
                 for powers, order_names in sector_orders.items()
-            ]
+            ],
+            "generated_by": version
     }
     with open(os.path.join(name, "disteval", name + ".json"), "w") as f:
         json.dump(descr, f, indent=2)

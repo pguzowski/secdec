@@ -73,6 +73,7 @@ def remap_one_to_zero(polynomial, *indices):
 
     return remapped_polynomial
 
+
 def find_singular_sets_at_one(polynomial):
     '''
     Find all possible sets of parameters such that the `polynomial`'s
@@ -84,7 +85,7 @@ def find_singular_sets_at_one(polynomial):
     >>> from pySecDec.decomposition.splitting import find_singular_sets_at_one
     >>> polysymbols = ['x0', 'x1']
     >>> poly = Polynomial.from_expression('1 - 10*x0 - x1', polysymbols)
-    >>> find_singular_sets_at_one(poly)
+    >>> list(find_singular_sets_at_one(poly))
     [(1,)]
 
     :param polynomial:
@@ -93,19 +94,15 @@ def find_singular_sets_at_one(polynomial):
 
     '''
     # ignore parameters that do not appear
-    indices_to_consider = []
-    for i in range(polynomial.number_of_variables):
-        if (polynomial.expolist[:,i] != 0).any():
-            indices_to_consider.append(i)
+    indices_to_consider = [i for i in range(polynomial.number_of_variables)
+                           if (polynomial.expolist[:,i] != 0).any()]
 
-    singular_sets = []
     for singular_set in powerset(indices_to_consider):
         poly_copy = polynomial.copy()
         poly_copy.expolist[:,singular_set] = 0
         poly_copy.simplify()
         if ( not poly_copy.has_constant_term() ) or ( len(poly_copy.coeffs) == 1 and poly_copy.coeffs[0] == 0 ):
-            singular_sets.append(singular_set)
-    return singular_sets
+            yield singular_set
 
 # **************************** split ****************************
 
@@ -144,7 +141,7 @@ def split(sector, seed, *indices):
             yield sector.copy()
             return
 
-        # We call this function recusively and pop the first index/splitting_value in each iteration
+        # We call this function recursively and pop the first index/splitting_value in each iteration
         index = indices[0]
         remaining_indices = indices[1:]
         splitting_value = splitting_point[0]

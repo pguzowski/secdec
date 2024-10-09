@@ -80,3 +80,14 @@ else
 disteval.done: $(foreach I,$(INTEGRALS),disteval/$I.json disteval/$I.so) disteval/builtin.so
 endif
 	date >$@
+
+# Source generation without compilation
+
+source: $(foreach I,$(INTEGRALS),$I/source)
+source-mma: $(foreach I,$(INTEGRALS),$I/source-mma)
+
+$(foreach I,$(INTEGRALS),$I/source)::
+	$(MAKE) -C $(dir $@) source
+
+$(foreach I,$(INTEGRALS),$I/source-mma)::
+	$(MAKE) -C $(dir $@) source-mma

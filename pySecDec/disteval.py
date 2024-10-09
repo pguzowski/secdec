@@ -6,7 +6,7 @@ Usage:
 Options:
     --epsabs=X              stop if this absolute precision is reached (default: 1e-10)
     --epsrel=X              stop if this relative precision is reached (default: 1e-4)
-    --timeout=X             stop after at most this many seconds (defaul: inf)
+    --timeout=X             stop after at most this many seconds (default: inf)
     --points=X              begin integration with this lattice size (default: 1e4)
     --presamples=X          use this many points for presampling (default: 1e4)
     --shifts=X              use this many lattice shifts per integral (default: 32)
@@ -35,6 +35,7 @@ import sys
 import time
 
 from .generating_vectors import generating_vector, max_lattice_size
+from .misc import version
 
 from pySecDecContrib import dirname as contrib_dirname
 
@@ -215,7 +216,7 @@ class RandomScheduler:
 
     async def drain(self):
         assert self.npending <= sum(len(w.callbacks) for w in self.workers)
-        if self.npending > 0:
+        while self.npending > 0:
             self.drained.clear()
             await self.drained.wait()
 
@@ -255,7 +256,7 @@ async def benchmark_worker(w):
             break
     w.speed = dn/(dt - dt0)
 
-def bracket_mul(br1, br2, maxorders):
+def bracket_mul(br1, br2, maxorders, mul=lambda a, b: a*b):
     """
     Multiply two multivariate polynomials represented in the form
     of {exponent: coefficient} dictionaries; skip any terms with
@@ -266,8 +267,15 @@ def bracket_mul(br1, br2, maxorders):
         for k2, v2 in br2.items():
             key = tuple(x + y for x, y in zip(k1, k2))
             if all(x <= y for x, y in zip(key, maxorders)):
-                br[key] = br.get(key, 0) + v1*v2
+                br[key] = br.get(key, 0) + mul(v1, v2)
     return br
+
+def mul_variance(coef, var):
+    cr2 = np.real(coef)**2
+    ci2 = np.imag(coef)**2
+    vr = np.real(var)
+    vi = np.imag(var)
+    return complex(cr2*vr + ci2*vi, ci2*vr + cr2*vi)
 
 def adjust_1d_n(W2, V, w, a, tau, nmin, nmax, allow_medianQMC):
     assert np.all(W2 > 0)
@@ -282,26 +290,27 @@ def adjust_1d_n(W2, V, w, a, tau, nmin, nmax, allow_medianQMC):
     assert not np.any(np.isinf(n))
     assert not np.any(np.isnan(n))
     # if not using medianQMC: Enforce nmax, raising the rest
-    if allow_medianQMC: return n
-    mask = (n > nmax)
-    while True:
-        n[mask] = nmax[mask]
-        maskc = np.count_nonzero(mask)
-        if maskc == 0: break
-        if maskc == len(n): return n
-        VV = V - (W2[mask] @ (w[mask]/n[mask]**a))
-        if VV < 0:
-            log(f"Probably can't reach the target error now that {np.count_nonzero(mask)} integrals are capped at maximum lattice size")
-            log(f"... will still try though")
-            return n
-        assert np.all(VV > 0)
-        mask2 = (~mask)
-        n[mask2] *= (1/VV * (W2[mask2] @ (w[mask2]/n[mask2]**a)))**(1/a)
-        assert not np.any(np.isinf(n))
-        assert not np.any(np.isnan(n))
-        add = (n > nmax)
-        if not np.any(add): break
-        mask |= add
+    if not allow_medianQMC:
+        mask = (n > nmax)
+        while True:
+            n[mask] = nmax[mask]
+            maskc = np.count_nonzero(mask)
+            if maskc == 0: break
+            if maskc == len(n): return n
+            VV = V - (W2[mask] @ (w[mask]/n[mask]**a))
+            if VV < 0:
+                log(f"Probably can't reach the target error now that {np.count_nonzero(mask)} integrals are capped at maximum lattice size")
+                log(f"... will still try though")
+                return n
+            assert np.all(VV > 0)
+            mask2 = (~mask)
+            n[mask2] *= (1/VV * (W2[mask2] @ (w[mask2]/n[mask2]**a)))**(1/a)
+            assert not np.any(np.isinf(n))
+            assert not np.any(np.isnan(n))
+            add = (n > nmax)
+            if not np.any(add): break
+            mask |= add
+    # Enforce nmin, lowering the rest where possible
     mask = (n < nmin)
     while True:
         n[mask] = nmin[mask]
@@ -314,7 +323,9 @@ def adjust_1d_n(W2, V, w, a, tau, nmin, nmax, allow_medianQMC):
         add = (n < nmin)
         if not np.any(add): break
         mask |= add
-    return n
+    assert not np.any(np.isnan(n))
+    assert np.all(n >= nmin)
+    return n.astype(int)
 
 def adjust_n(W2, V, w, a, tau, nmin, nmax, allow_medianQMC, names=[]):
     assert np.all(V>0)
@@ -322,8 +333,8 @@ def adjust_n(W2, V, w, a, tau, nmin, nmax, allow_medianQMC, names=[]):
     n = nmin.copy()
     for i in range(len(W2)-1, -1, -1):
         mask = (w != 0) & (W2[i,:] != 0)
-        n[mask] = adjust_1d_n(W2[i,mask], V[i], w[mask], a, tau[mask], n[mask], nmax[mask], allow_medianQMC)
-        assert not np.any(np.isnan(n))
+        if np.count_nonzero(mask) > 0:
+            n[mask] = adjust_1d_n(W2[i,mask], V[i], w[mask], a, tau[mask], n[mask], nmax[mask], allow_medianQMC)
     return n
 
 async def prepare_eval(workers, datadir, intfile):
@@ -410,37 +421,35 @@ async def prepare_eval(workers, datadir, intfile):
         t1 - t0,
         t2 - t1)
 
-async def do_eval(prepared, coeffsdir, epsabs, epsrel, npresample, npoints0, nshifts, lattice_candidates, standard_lattices, valuemap, valuemap_coeff, deadline):
+async def do_eval(prepared, coeffsdir, epsabs, epsrel, npresample, npoints0, nshifts, lattice_candidates, standard_lattices, valuemap_int, valuemap_coeff, deadline):
 
     datadir, info, requested_orders, kernel2idx, infos, ampcount, korders, family2idx, par, t_init, t_worker = prepared
 
     if lattice_candidates == 0: standard_lattices=True
+    if lattice_candidates > 0 and lattice_candidates % 2 == 0: lattice_candidates += 1
 
     t1 = time.time()
 
     for p in info["realp"] + info["complexp"]:
-        if p not in valuemap:
+        if p not in valuemap_int:
             raise ValueError(f"missing integral parameter: {p}")
 
     sp_regulators = sp.var(info["regulators"])
 
-    valuemap_rat = {
-        k:sp.nsimplify(v, rational=True, tolerance=np.abs(v)*1e-13)
-        for k, v in valuemap_coeff.items()
-    }
     realp = {
-        i : [valuemap[p] for p in info["realp"]]
-        for i, info in infos.items()
+        fam : [valuemap_int[p] for p in info["realp"]]
+        for fam, info in infos.items()
     }
     complexp = {
-        i : [(np.real(valuemap[p]), np.imag(valuemap[p])) for p in info["complexp"]]
-        for i, info in infos.items()
+        fam : [(np.real(valuemap_int[p]), np.imag(valuemap_int[p])) for p in info["complexp"]]
+        for fam, info in infos.items()
     }
+    valuemap_coeff = {k : str(v) for k, v in valuemap_coeff.items()}
 
     log(f"parsing {len(infos)} integral prefactors")
     for ii in infos.values():
         ii["expanded_prefactor_value"] = {
-            tuple(t["regulator_powers"]) : complex(sp.sympify(t["coefficient"]).subs(valuemap))
+            tuple(t["regulator_powers"]) : complex(sp.sympify(t["coefficient"]).subs(valuemap_int))
             for t in ii["expanded_prefactor"]
         }
 
@@ -454,9 +463,9 @@ async def do_eval(prepared, coeffsdir, epsabs, epsrel, npresample, npoints0, nsh
     # Load the integral coefficients
     ap2coeffs = {} # (ampid, powerlist) -> coeflist
     if info["type"] == "integral":
-        sum_names = ["sum0"]
+        sum_names = [info["name"]]
         br_coef = {(0,)*len(info["regulators"]): sp.sympify(1)}
-        split_integral_into_orders(ap2coeffs, 0, kernel2idx, info, br_coef, valuemap, sp_regulators, requested_orders)
+        split_integral_into_orders(ap2coeffs, 0, kernel2idx, info, br_coef, valuemap_int, sp_regulators, requested_orders)
     elif info["type"] == "sum":
         log("loading amplitude coefficients")
         sum_names = list(info["sums"].keys())
@@ -468,7 +477,7 @@ async def do_eval(prepared, coeffsdir, epsabs, epsrel, npresample, npoints0, nsh
                 return
             log("-", t["coefficient"])
             br_coef = {tuple(k):complex(re, im) for k, (re, im) in br_coef}
-            split_integral_into_orders(ap2coeffs, a, kernel2idx, infos[t["integral"]], br_coef, valuemap, sp_regulators, requested_orders)
+            split_integral_into_orders(ap2coeffs, a, kernel2idx, infos[t["integral"]], br_coef, valuemap_int, sp_regulators, requested_orders)
             done_evalf.todo -= 1
             if done_evalf.todo == 0:
                 done_evalf.set_result(None)
@@ -480,7 +489,7 @@ async def do_eval(prepared, coeffsdir, epsabs, epsrel, npresample, npoints0, nsh
                 coef_ord = - kern_lord - pref_lord + requested_orders
                 par.call_cb("evalf", (
                         os.path.relpath(os.path.join(coeffsdir, t["coefficient"]), datadir),
-                        {k:str(v) for k,v in valuemap_rat.items()},
+                        {k:str(v) for k,v in valuemap_coeff.items()},
                         [[str(var), int(order)] for var, order in zip(sp_regulators, coef_ord)]
                     ),
                     evalf_cb,
@@ -488,15 +497,45 @@ async def do_eval(prepared, coeffsdir, epsabs, epsrel, npresample, npoints0, nsh
                 )
         await done_evalf
 
+    # Sort in the (ampid, orderid) order to make the reporting
+    # stable. The code below should however work no matter the
+    # order here.
+    ap2coeffs = dict(sorted(ap2coeffs.items()))
+
     W = np.stack([w for w in ap2coeffs.values()])
-    W2 = abs2(W)
+    Wre2 = np.real(W)**2
+    Wim2 = np.imag(W)**2
+    W2 = Wre2 + Wim2
+    W_re_var_coef = Wre2 + 1j*Wim2
+    W_im_var_coef = Wim2 + 1j*Wre2
+    del Wre2, Wim2
     log(f"will consider {len(ap2coeffs)} sums:")
     for a, p in sorted(ap2coeffs.keys()):
         log(f"- {sum_names[a]!r},", " ".join(f"{r}^{e}" for r, e in zip(sp_regulators, p)))
 
-    epsrel = [epsrel[a] if a < len(epsrel) else epsrel[-1] for a, p in ap2coeffs.keys()]
-    epsabsOrig = epsabs.copy()
-    epsabs = [epsabs[a] if a < len(epsabs) else epsabs[-1] for a, p in ap2coeffs.keys()]
+    if len(epsrel) <= len(sum_names):
+        # Assume one epsrel per amplitude is specified, in the
+        # order of the amplitudes. If fewer are given, use the
+        # last entry as the default.
+        epsrel = [epsrel[a] if a < len(epsrel) else epsrel[-1] for a, p in ap2coeffs.keys()]
+    elif len(epsrel) == len(ap2coeffs):
+        # Assume one epsrel per amplitude*order is specified, in the
+        # order of the amplitudes. For advanced use only.
+        pass
+    else:
+        raise ValueError(f"Incorrect size of the epsrel array given")
+
+    if len(epsabs) <= len(sum_names):
+        # Assume one epsabs per amplitude is specified, in the
+        # order of the amplitudes. If fewer are given, use the
+        # last entry as the default.
+        epsabs = [epsabs[a] if a < len(epsabs) else epsabs[-1] for a, p in ap2coeffs.keys()]
+    elif len(epsabs) == len(ap2coeffs):
+        # Assume one epsabs per amplitude*order is specified, in the
+        # order of the amplitudes. For advanced use only.
+        pass
+    else:
+        raise ValueError(f"Incorrect size of the epsabs array given")
 
     # Presample all kernels
     kern_rng = [np.random.RandomState(0) for fam, ker in kernel2idx.keys()]
@@ -526,9 +565,9 @@ async def do_eval(prepared, coeffsdir, epsabs, epsrel, npresample, npoints0, nsh
     lattices = np.zeros(len(kernel2idx), dtype=np.float64)
     for i in range(len(kernel2idx)):
         lattices[i], genvecs[i] = generating_vector(dims[i], npoints0)
-    shift_val = np.full((len(kernel2idx), nshifts), np.nan, dtype=np.complex128)
-    shift_rnd = np.empty((len(kernel2idx), nshifts), dtype=object)
-    shift_tag = np.full((len(kernel2idx), nshifts), None, dtype=object)
+    shift_val = np.full((len(kernel2idx), max(nshifts,lattice_candidates)), np.nan, dtype=np.complex128)
+    shift_rnd = np.empty((len(kernel2idx), max(nshifts,lattice_candidates)), dtype=object)
+    shift_tag = np.full((len(kernel2idx), max(nshifts,lattice_candidates)), None, dtype=object)
     kern_db = np.ones(len(kernel2idx))
     kern_dt = np.ones(len(kernel2idx))
     kern_di = np.ones(len(kernel2idx))
@@ -698,9 +737,9 @@ async def do_eval(prepared, coeffsdir, epsabs, epsrel, npresample, npoints0, nsh
                     early_exit = True
 
                 # Not all kernels might be done due to an early exit
-                mask_done = np.logical_and(mask_todo, ~np.any(np.isnan(shift_val), axis=1))
+                mask_done = np.logical_and(mask_todo, ~np.any(np.isnan(shift_val[:,:nshifts]), axis=1))
                 log(f"integration done, updated {np.count_nonzero(mask_done)} kernels")
-                shift_val_done = shift_val[mask_done]
+                shift_val_done = shift_val[mask_done,:nshifts]
                 shift_val[mask_todo] = np.nan
                 new_kern_val = np.mean(shift_val_done, axis=1)
                 new_kern_val /= lattices[mask_done]
@@ -709,18 +748,24 @@ async def do_eval(prepared, coeffsdir, epsabs, epsrel, npresample, npoints0, nsh
 
                 latticex = lattices[mask_done]/oldlattices[mask_done]
                 precisionx = np.sqrt((np.real(kern_var[mask_done]) + np.imag(kern_var[mask_done])) / (np.real(new_kern_var) + np.imag(new_kern_var)))
+                ratiox = kern_val[mask_done]/new_kern_val
+                with np.errstate(all='ignore'):
+                    sigmarx = np.abs(np.real(kern_val[mask_done]-new_kern_val))/np.sqrt(np.maximum( np.abs(np.real(kern_var[mask_done])), np.abs(np.real(new_kern_var)) ))
+                    sigmaix = np.abs(np.imag(kern_val[mask_done]-new_kern_val))/np.sqrt(np.maximum( np.abs(np.imag(kern_var[mask_done])), np.abs(np.imag(new_kern_var)) ))
                 for i, idx in enumerate(mask_done.nonzero()[0]):
                     idx = int(idx)
                     if precisionx[i] < 1.0:
-                        log(f"k{idx} @ {lattices[idx]:.3e} = {new_kern_val[i]:.16e} ~ {new_kern_var[i]:.3e} ({1/precisionx[i]:.4g}x worse at {latticex[i]:.1f}x lattice)")
+                        log(f"k{idx} @ {lattices[idx]:.3e} = {new_kern_val[i]:.16e} ~ {new_kern_var[i]:.3e} ({1/precisionx[i]:.4g}x worse at {latticex[i]:.1f}x lattice; {sigmarx[i]:.3g}+{sigmaix[i]:.3g}j sigma)")
                     else:
-                        log(f"k{idx} @ {lattices[idx]:.3e} = {new_kern_val[i]:.16e} ~ {new_kern_var[i]:.3e} ({precisionx[i]:.4g}x better at {latticex[i]:.1f}x lattice)")
+                        log(f"k{idx} @ {lattices[idx]:.3e} = {new_kern_val[i]:.16e} ~ {new_kern_var[i]:.3e} ({precisionx[i]:.4g}x better at {latticex[i]:.1f}x lattice; {sigmarx[i]:.3g}+{sigmaix[i]:.3g}j sigma)")
+                    if (sigmarx[i] > 10. or sigmaix[i] > 10.) and not math.isnan(latticex[i]):
+                        log(f"WARNING: unlikely that new result is compatible with old, {new_kern_val[i]} ~ {np.sqrt(new_kern_var[i])} vs {kern_val[mask_done][i]} ~ {np.sqrt(kern_var[mask_done][i])}")
                 submask_lucky = new_kern_var <= kern_var[mask_done]
                 kern_val[mask_done] = np.where(submask_lucky, new_kern_val, kern_val[mask_done])
                 kern_var[mask_done] = np.where(submask_lucky, new_kern_var, kern_var[mask_done])
                 log(f"unlucky results: {np.count_nonzero(~submask_lucky)} out of {np.count_nonzero(mask_done)}")
             amp_val = W @ kern_val
-            amp_var = W2 @ kern_var
+            amp_var = W_re_var_coef @ np.real(kern_var) + W_im_var_coef @ np.imag(kern_var)
             # Report results
             if np.any(mask_todo):
                 ampids = sorted(set(a for a, p in ap2coeffs.keys()))
@@ -728,14 +773,14 @@ async def do_eval(prepared, coeffsdir, epsabs, epsrel, npresample, npoints0, nsh
                 for ampid in ampids:
                     relerr = []
                     log(f"{sum_names[ampid]!r}=(")
-                    for (a, p), val, var in sorted(zip(ap2coeffs.keys(), amp_val, amp_var)):
+                    for (a, p), val, var, i in sorted(zip(ap2coeffs.keys(), amp_val, amp_var, range(len(ap2coeffs)))):
                         if a != ampid: continue
                         stem = "*".join(f"{r}^{p}" for r, p in zip(sp_regulators, p))
                         err = np.sqrt(np.real(var)) + (1j)*np.sqrt(np.imag(var))
                         log(f"  +{stem}*({val:+.16e})")
                         log(f"  +{stem}*({err:+.16e})*plusminus")
                         abserr = np.abs(err)
-                        relerr.append(abserr / np.abs(val) if abserr > epsabsOrig[ampid] else 0.0)
+                        relerr.append(abserr / np.abs(val) if abserr > epsabs[i] else 0.0)
                     log(")")
                     log(f"{sum_names[ampid]!r} relative errors by order:", ", ".join(f"{e:.2e}" for e in relerr))
                     relerrs.append(np.max(relerr))
@@ -751,7 +796,7 @@ async def do_eval(prepared, coeffsdir, epsabs, epsrel, npresample, npoints0, nsh
             if standard_lattices:
                 for i in range(len(kernel2idx)):
                     try: n[i], newgenvecs[i] = generating_vector(dims[i], n[i])
-                    except ValueError: 
+                    except ValueError:
                         if lattice_candidates > 0: pass
             if not np.any(n != lattices):
                 log("can't increase the lattice sizes any more; giving up")
@@ -769,7 +814,7 @@ async def do_eval(prepared, coeffsdir, epsabs, epsrel, npresample, npoints0, nsh
             amp_val, amp_var = await iterate_integration(propose_lattices1)
 
     if not early_exit:
-        log(f"trying to achieve epsrel={epsrel} and epsabs={epsabs} for each amplitude")
+        log(f"trying to achieve epsrel={epsrel} and epsabs={epsabs} for each order of each amplitude")
         amp_val, amp_var = await iterate_integration(propose_lattices2)
 
     # Report the results
@@ -790,6 +835,26 @@ async def do_eval(prepared, coeffsdir, epsabs, epsrel, npresample, npoints0, nsh
         maxlattice = np.max(lattices[mask])
         log(f"- {f}: {di:.4e} evals, {dt:.4e} sec, {np.min(slow):.4g} - {np.max(slow):.4g} bubbles, {minlattice:.4e} - {maxlattice:.4e} pts")
 
+    # Calculate the values of individual integrals
+    intvals = {}
+    for ii in infos.values():
+        br_pref = ii["expanded_prefactor_value"]
+        br_kern_val = {
+            tuple(o["regulator_powers"]) : sum(kern_val[kernel2idx[ii["name"], k]] for k in o["kernels"])
+            for o in ii["orders"]
+        }
+        br_kern_var = {
+            tuple(o["regulator_powers"]) : sum(kern_var[kernel2idx[ii["name"], k]] for k in o["kernels"])
+            for o in ii["orders"]
+        }
+        maxord = np.array(ii["lowest_orders"]) + np.array(ii["prefactor_highest_orders"])
+        br_val = bracket_mul(br_pref, br_kern_val, maxord)
+        br_var = bracket_mul(br_pref, br_kern_var, maxord, mul=mul_variance)
+        intvals[ii["name"]] = [
+            [p, (np.real(val), np.imag(val)), (np.sqrt(np.real(br_var[p])), np.sqrt(np.imag(br_var[p])))]
+            for p, val in sorted(br_val.items())
+        ]
+
     return {
         "regulators": info["regulators"],
         "sums": {
@@ -799,8 +864,18 @@ async def do_eval(prepared, coeffsdir, epsabs, epsrel, npresample, npoints0, nsh
                 if a == ampid
             ]
             for ampid in range(ampcount)
-        }
+        },
+        "integrals": intvals
     }
+
+async def clear_eval(prepared):
+    datadir, info, requested_orders, kernel2idx, infos, ampcount, korders, family2idx, par, t_init, t_worker = prepared
+    await par.drain()
+    for worker in par.workers:
+        worker.process.stdin.close()
+        worker.process.kill()
+    for worker in par.workers:
+        await worker.process.wait()
 
 def default_worker_commands(dirname):
     ncpu = 0
@@ -914,9 +989,19 @@ def result_to_mathematica(result):
     text.append("}")
     return "".join(text)
 
+def result_to_json(result):
+    for key in ("sums", "integrals"):
+        result[key] = {
+            sum_name : {
+                tuple(exp) : (complex(val_re, val_im), complex(err_re, err_im))
+                for exp, (val_re, val_im), (err_re, err_im) in sum_terms
+            }
+            for sum_name, sum_terms in result[key].items()
+        }
+    return result
+
 def main():
 
-    valuemap = {}
     valuemap_coeff = {}
     valuemap_int = {}
     npoints = 10**4
@@ -960,6 +1045,7 @@ def main():
     clusterfile = os.path.join(dirname, "cluster.json") if clusterfile is None else clusterfile
     assert lattice_candidates >= 0
     if lattice_candidates > 0 and lattice_candidates % 2 == 0: lattice_candidates += 1
+    log(version)
     log("Settings:")
     log(f"- file = {intfile}")
     log(f"- epsabs = {epsabs}")
@@ -970,27 +1056,22 @@ def main():
     log(f"- lattice-candidates = {lattice_candidates}")
     for arg in args[1:]:
         if "=" not in arg: raise ValueError(f"Bad argument: {arg}")
-        key, value = arg.split("=", 1)
-        value = complex(value)
-        value = value.real if value.imag == 0 else value
+        key, svalue = arg.split("=", 1)
+        fvalue = complex(sp.sympify(svalue))
+        fvalue = fvalue.real if fvalue.imag == 0 else fvalue
         if key.startswith("coeff-"):
-            valuemap_coeff[key[6:]] = value
+            valuemap_coeff[key[6:]] = svalue
         elif key.startswith("int-"):
-            valuemap_int[key[4:]] = value
+            valuemap_int[key[4:]] = fvalue
         else:
-            valuemap[key] = value
-    valuemap_int = {**valuemap, **valuemap_int}
-    valuemap_coeff = {**valuemap, **valuemap_coeff}
-    log("Invariants:")
+            valuemap_coeff[key] = svalue
+            valuemap_int[key] = fvalue
+    log("Integral variables:")
     for key, value in valuemap_int.items():
-        if valuemap_coeff.get(key, None) == value:
-            log(f"- {key} = {value}")
-    for key, value in valuemap_int.items():
-        if valuemap_coeff.get(key, None) != value:
-            log(f"- integral {key} = {value}")
+        log(f"- {key} = {value!s}")
+    log("Coefficient variables:")
     for key, value in valuemap_coeff.items():
-        if valuemap_int.get(key, None) != value:
-            log(f"- coefficient {key} = {value}")
+        log(f"- {key} = {value}")
 
     # Load worker list
     workers = load_worker_commands(clusterfile, dirname)
@@ -1005,12 +1086,24 @@ def main():
 
     # Report the result
     if result_format == "json":
-        json.dump(result, sys.stdout, indent=2)
+        def json2str(obj, indent):
+            if isinstance(obj, dict):
+                return f"{{\n{indent} " + \
+                    f",\n{indent} ".join([f"{json.dumps(k)}:{json2str(v, indent + ' ')}" for k, v in obj.items()]) + \
+                    f"\n{indent}}}"
+            elif isinstance(obj, (list, tuple)):
+                return f"[\n{indent} " + \
+                    f",\n{indent} ".join([json.dumps(i) for i in obj]) + \
+                    f"\n{indent}]"
+            return json.dumps(obj)
+        print(json2str(result, ""))
     elif result_format == "mathematica":
         print(result_to_mathematica(result))
     else:
         print(result_to_sympy(result))
     sys.stdout.flush()
+
+    loop.run_until_complete(clear_eval(prepared))
 
 if __name__ == "__main__":
     main()

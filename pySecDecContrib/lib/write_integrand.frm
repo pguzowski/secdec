@@ -209,7 +209,7 @@ Format 255;
   Local expression = expansion[$currentOrder];
 
 * Find the calls to the contour deformation polynomials that need a sign check.
-* The calls differ only in which Feynman paramters are set to zero or one. We
+* The calls differ only in which Feynman parameters are set to zero or one. We
 * investigate that by looking at the calls to "SecDecInternalCalI" (and its derivatives).
 * {
   #If `contourDeformation'
@@ -771,7 +771,7 @@ Format 255;
 * Replace all function calls by symbols for simultaneous optimization.
 * {
 
-  #redefine functionsToReplace "`functions',log,SecDecInternalPow,SecDecInternalDenominator"
+  #redefine functionsToReplace "`functions',log,exp,SecDecInternalPow,SecDecInternalDenominator"
   #If `contourDeformation'
     #redefine functionsToReplace "SecDecInternalRealPart,`functionsToReplace'"
   #EndIf
@@ -891,7 +891,7 @@ Format 255;
   #EndIf
 
 * define the abbreviations in c
-  Format float 20;
+  Format rational;
   Format C;
   Format 255;
 
@@ -920,7 +920,7 @@ Format 255;
 * Keep track of function calls that are not written to
 * the c++ file yet.
 
-  #redefine functionsToReplace "`functions',`decomposedPolynomialDerivatives',log,SecDecInternalPow,SecDecInternalDenominator"
+  #redefine functionsToReplace "`functions',`decomposedPolynomialDerivatives',log,exp,SecDecInternalPow,SecDecInternalDenominator"
   #If `contourDeformation'
     #redefine functionsToReplace "SecDecInternalRealPart,`contourdefJacobianFunctions',`deformedIntegrationVariableDerivativeFunctions',`functionsToReplace'"
   #EndIf
@@ -1037,7 +1037,7 @@ Format 255;
 *   optimize and write to c file
 *   {
     skip unparsed;
-    Format float 20;
+    Format rational;
     Format C;
     Format O`optimizationLevel';
     Format 255;
@@ -1085,7 +1085,7 @@ Format 255;
           #EndIf
           #write <sector`sectorID'.info> "%E);" exponent(#@FAIL@#)
           Format C;
-          Format float 20;
+          Format rational;
           Format 255;
           drop exponent;
         #Else
@@ -1138,7 +1138,7 @@ Format 255;
     #EndDo
   #EndIf
 
-  Format float 20;
+  Format rational;
   Format C;
   Format O`optimizationLevel';
   Format 255;
@@ -1172,7 +1172,7 @@ Format 255;
 
       #If termsin(expr) > 0
         #write <sector`sectorID'.info> "SecDecInternalSignCheckExpression = SecDecInternalImagPart(%E);" expr(#@FAIL@#)
-        #write <sector`sectorID'.info> "if (SecDecInternalSignCheckExpression > 0) SecDecInternalSignCheckErrorContourDeformation(`signCheckId');"
+        #write <sector`sectorID'.info> "if (!(SecDecInternalSignCheckExpression <= 0)) SecDecInternalSignCheckErrorContourDeformation(`signCheckId');"
       #EndIf
 
     #EndDo
@@ -1190,7 +1190,7 @@ Format 255;
 
       #If termsin(expr) > 0
         #write <sector`sectorID'.info> "SecDecInternalSignCheckExpression = SecDecInternalRealPart(%E);" expr(#@FAIL@#)
-        #write <sector`sectorID'.info> "if (SecDecInternalSignCheckExpression < 0)  SecDecInternalSignCheckErrorPositivePolynomial(`signCheckId');"
+        #write <sector`sectorID'.info> "if (!(SecDecInternalSignCheckExpression >= 0)) SecDecInternalSignCheckErrorPositivePolynomial(`signCheckId');"
       #EndIf
 
     #EndDo

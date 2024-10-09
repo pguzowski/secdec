@@ -86,7 +86,7 @@ class TestMidLevel(TestMakePackage):
                         polynomials_to_decompose = ['(x+y)^(-2+eps)']
                     )
 
-        self.assertEqual(template_replacements['pole_structures_initializer'], '{{-1,0}}')
+        self.assertEqual(template_replacements['pole_structures_initializer'], '{{0,-1}}')
 
     #@pytest.mark.active
     def test_pole_structures_serial(self):
@@ -103,7 +103,7 @@ class TestMidLevel(TestMakePackage):
                         polynomials_to_decompose = ['(x+y)^(-2+eps)']
                     )
 
-        self.assertEqual(template_replacements['pole_structures_initializer'], '{{-1,0}}')
+        self.assertEqual(template_replacements['pole_structures_initializer'], '{{0,-1}}')
 
 # ----------------------------------- parse input -----------------------------------
 class TestConvertInput(TestMakePackage):
@@ -418,7 +418,7 @@ class TestMakeFORMFunctionDefinition(unittest.TestCase):
         target_FORM_code += "  Id SecDecInternalfDUMMYSecDecInternalfDUMMYmyNamePart0Part2(x?,y?,z?) =  + (3)*a*b*c^3;\n"
         target_FORM_code += "  Id SecDecInternalfDUMMYSecDecInternalfDUMMYmyNamePart0Part3(x?,y?,z?) =  + (4)*a*b*c^4;\n"
 
-        self.assertEqual(FORM_code, target_FORM_code)    
+        self.assertEqual(FORM_code, target_FORM_code)
 
 class TestMiscellaneous(unittest.TestCase):
     #@pytest.mark.active

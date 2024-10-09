@@ -57,6 +57,7 @@ are:
  * CUBA (http://www.feynarts.de/cuba/), used for `Vegas`, `Suave`, `Divonne`, and `Cuhre` integrators.
  * GSL (http://www.gnu.org/software/gsl/), used for the `CQuad` integrator.
  * FORM (http://www.nikhef.nl/~form/), used to optimize the integrands.
+ * zlib (http://zlib.net/), used by FORM.
  * Nauty and Traces (http://pallini.di.uniroma1.it/), used by `pySecDec.make_package` to find symmetries between sectors (if `use_dreadnaut` is set to `True`).
  * Normaliz (https://www.normaliz.uni-osnabrueck.de), used by the geometric decomposition module (`decomposition_method` set to `'geometric'` or `'geometric_ku'`).
  * Catch (https://github.com/philsquared/Catch) used by SedDecUtil (part of pySecDec) for unit testing.
@@ -157,7 +158,7 @@ the command
 
     $ make doc
 
-generates the documentaion in `html` and in `pdf` format. Developers
+generates the documentation in `html` and in `pdf` format. Developers
 should inline-document python functions and also keep the C++
 part up to date. To generate HTML and PDF separately, use
 
@@ -169,7 +170,7 @@ and
 
 [sphinx]: http://www.sphinx-doc.org
 
-Building the documentaion in pdf format requires an up-to-date
+Building the documentation in pdf format requires an up-to-date
 installation of a latex implementation. If you get an error about
 missing `.sty` file, do the following:
 
@@ -196,7 +197,7 @@ make sure you have a recent [Singularity] installed, and run
 
     ./build-release.sh
 
-This will create a source distribuion file (`dist/*.tar.gz`)
+This will create a source distribution file (`dist/*.tar.gz`)
 and several prebuild distribution files (`dist/*.whl`); it will
 also print the instructions on how to double-check the files
 with [auditwheel] and upload them to PyPI using [Twine].
@@ -208,7 +209,7 @@ The reason for using Singularity here is because prebuilt
 distributions must be built inside one of the [manylinux] Docker
 images: this guarantees that the prebuilt libraries and programs
 will work on a wide range of Linux systems. If it wasn't for
-this requirement, then making a distibution would be as simple
+this requirement, then making a distribution would be as simple
 as running
 
     $ make dist

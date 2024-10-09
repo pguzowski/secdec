@@ -5,10 +5,75 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.6.4] - 2024-07-16
+
+### Added
+- `disteval.clear_eval()` and `integral_interface.DistevalLibrary.close()` to clean up *disteval* resources.
+- `make source-mma` to output integrals in Mathematica-compatible format (*experimental*).
+
+### Changed
+- Minor code style changes.
+
+### Fixed
+- `SecDecInternalNPow()` would previously not compile on the CPU.
+- Premature end of *disteval* integration in rare cases with few integrals.
+- Typos and spelling.
+
+## [1.6.3] - 2024-04-10
+
+### Added
+- The command line integration interface of *disteval* now supports variable values specified as rational numbers (e.g. `1/3` instead of `0.3333`).
+- `DistevalLibrary` now supports variable values specified as strings (e.g. `"0.3333"`), and as sympy numeric objects (e.g. `sympy.sympify("1/3")`).
+- `pySecDec.algebra` now defines the exponential function in the class `Exp`, which enables `remainder_expression` in `MakePackage` to include
+  `exp()` factors and use their derivatives to define subtraction terms.
+- High level test `massive_ft_integral`. Evaluates a massive flow-time integral which requires the newly added `Exp` class.
+- Unit tests in `test_algebra` for the newly added `Exp` class.
+
+### Changed
+- [FORM](https://github.com/vermaseren/form) updated to 4.3.1.
+- Require recent version of `numpy>=1.23`.
+
+### Fixed
+- The expansion order of the `integrals` key of the `json` format from *disteval*, in cases when the leading order of the prefactor is not zero.
+- GPU results being slightly off in very rare cases with *disteval*.
+
+## [1.6.2] - 2023-09-01
+
+### Added
+- `format` option for `IntegralLibrary`, allows the integral result to be output in `ginac`, `sympy`, `mathematica`, `maple` and `json` compatible formats.
+- Example `nodist_examples/BNP6_wu`. A 2-loop 4-point non-planar integral that requires a rescaling of the Feynman parameters.
+
+### Changed
+- [GiNaC](https://www.ginac.de/) updated to 1.8.7.
+- Updated "Installation", "Getting Started" and "FAQ" documentation to reflect current usage guidelines.
+
+### Fixed
+- The final integration error reported by *disteval* in cases when either the sum coefficients, or the integral prefactors have non-zero imaginary parts. In such cases the total requested error bound would be satisfied correctly, but the reporting of it would be incorrect.
+- Crash when using median QMC rules with *disteval* with the assertion error `assert np.all(nmin > 0)`.
+
+## [1.6.1] - 2023-07-04
+
+### Added
+- The `json` output format of *disteval* now includes the values of the integrals in addition to the values of the sums.
+- [zlib](http://zlib.net/) version 1.2.13, needed by FORM.
+- Example `nodist_examples/ggh`. Demonstrates the computation of the 1- and 2-loop amplitudes for Higgs production in gluon fusion.
+- Example `nodist_examples/triangle2L_wu`. Integral that requires a rescaling of the Feynman parameters.
+
+### Changed
+- FORM is now configured using `--with-zlib`, to avoid [FORM issue 95](https://github.com/vermaseren/form/issues/95).
+- If `lattice_candidates` is even and non-zero, use `lattice_candidates+1` candidates.
+- The default `decomposition_method` of `make_package` and `code_writer.make_package` to `geometric_no_primary`.
+- The default `decomposition_method` of `loop_integral.loop_package` to `geometric`.
+- [GiNaC](https://www.ginac.de/) updated to 1.8.6+ (commit 4bc2092 from Jun 21 2023).
+
+### Fixed
+- Critical bug in *disteval* introduced in 1.6 when using the median QMC lattice rules. Bug led to incorrect results for integrals with a severely underestimated error after recomputing with a larger lattice.
+- Parsing of the coefficient expressions with `ginsh`. Previously, mixing the exponentiation operator `^` and the unary `+` and/or `-` operators would result in `ginsh` misparsing the coefficients.
+
 ## [1.6] - 2023-05-29
 
 ### Added
-- New integrator `Disteval`.
+- New integrator "Disteval".
 - Integration based on median QMC rule implemented, can be enabled with option `lattice_candidates`.
 - Numerator support for expansion by regions.
 - `suggested_extra_regulator_exponent`  function, returns a list of suggested extra regulators sufficient to regularise a loop integral.

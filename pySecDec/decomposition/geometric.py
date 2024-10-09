@@ -35,12 +35,15 @@ def Cheng_Wu(sector, index=-1):
 
     Jacobian = sector.Jacobian.replace(index, 1, remove)
     other = [poly.replace(index, 1, remove) for poly in sector.other]
-    cast = [Product( *(product.factors[i].replace(index, 1, remove) for i in (0,1)) ) for product in sector.cast]
+    cast = [Product( *(product.factors[i].replace(index, 1, remove)
+                       for i in (0, 1)) )
+            for product in sector.cast]
     return Sector(cast, other, Jacobian)
+
 
 # ********************** geometric decomposition **********************
 def generate_fan(*polynomials):
-    '''
+    r'''
     Calculate the fan of the polynomials in the input. The rays of a
     cone are given by the exponent vectors after factoring out a monomial
     together with the standard basis vectors. Each choice of factored out
@@ -49,7 +52,7 @@ def generate_fan(*polynomials):
     considered.
 
     :param polynomials:
-        abritrarily many instances of :class:`.Polynomial` where
+        arbitrarily many instances of :class:`.Polynomial` where
         all of these have an equal number of variables;
         The polynomials to calculate the fan for.
     '''
@@ -81,6 +84,7 @@ def generate_fan(*polynomials):
            ):
                 fan.append(cone)
     return fan
+
 
 def transform_variables(polynomial, transformation, polysymbols='y'):
     r'''
@@ -121,6 +125,7 @@ def transform_variables(polynomial, transformation, polysymbols='y'):
     outpoly.polysymbols = polysymbols
     outpoly.number_of_variables = number_of_new_variables
     return outpoly
+
 
 def geometric_decomposition(sector, indices=None, normaliz=None, workdir='normaliz_tmp'):
     '''
@@ -189,7 +194,7 @@ def geometric_decomposition(sector, indices=None, normaliz=None, workdir='normal
     polytope.complete_representation(normaliz, workdir)
 
     if len(polytope.equations) > 0:
-        NotImplementedError("Polytope is not full dimensional in geometric_decomposition. Input integral is scaleless.")
+        raise NotImplementedError("Polytope is not full dimensional in geometric_decomposition. Input integral is scaleless.")
 
     transformation = polytope.facets.T[:-1] # do not need offset term "a_F"
     incidence_lists = polytope.vertex_incidence_lists()
@@ -226,25 +231,24 @@ def geometric_decomposition(sector, indices=None, normaliz=None, workdir='normal
 
         return subsector
 
-
     for cone_indices in incidence_lists.values():
         cone = transformation[:,cone_indices].T
 
-        # triangluate where neccessary
+        # triangulate where necessary
         if len(cone_indices) != dim:
             # assert len(cone) > dim # --> this check is done by `triangulate`
             triangular_cones = triangulate(cone, normaliz, workdir)
 
             assert len(triangular_cones.shape) == 3
             for i, triangular_cone in enumerate(triangular_cones):
-                triangular_cone_indices = []
-                for vector in triangular_cone:
-                    # find the indices of the vectors defining the triangular cone
-                    triangular_cone_indices.append(int(  np.where( (vector == transformation.T).all(axis=1) )[0]  ))
+                # find the indices of the vectors defining the triangular cone
+                triangular_cone_indices = [int( np.where( (vector == transformation.T).all(axis=1) )[0] )
+                                           for vector in triangular_cone]
                 yield make_sector(triangular_cone_indices, triangular_cone)
 
         else:
             yield make_sector(cone_indices, cone)
+
 
 def geometric_decomposition_ku(sector, indices=None, normaliz=None, workdir='normaliz_tmp'):
     '''

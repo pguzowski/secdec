@@ -16,11 +16,12 @@ except ImportError:
     from queue import Queue
 import os
 import os.path
+from .misc import version
 
 def _parse_series_coefficient(text):
     """
     Parse a textual representation of a single coefficient
-    in a series. Retrun a float, a complex number, a tuple
+    in a series. Return a float, a complex number, a tuple
     consisting of the mean and the standard deviation if it
     is given, or a tuple of three elements (via _parse_series)
     if the coefficient is a nested series.
@@ -270,6 +271,52 @@ def series_to_maple(series):
     """
     return _convert_series(series, "^", "O")
 
+def series_to_json(series, name="sum"):
+    """
+    Convert a textual representation of a series into json format.
+
+    :param series:
+        str;
+        Any of the series obtained by calling an :class:`.IntegralLibrary` object.
+    :param name:
+        str;
+        The name of the series.
+        Default: ``"sum"``.
+    :returns:
+        A dictionary containing the ``'regulators'`` and the value of the series
+        stored as (exponent, value) key-value pairs.
+    """
+    def parse_terms(t, bottom_is_tuple, var=[], order=[], all_terms={'regulators':[]}):
+        def is_bottom(t):
+            return (not isinstance(t,tuple) and not isinstance(t,list))
+        if is_bottom(t[0] if bottom_is_tuple else t):
+            all_terms[tuple(order)] = t if bottom_is_tuple else (t,0.)
+            all_terms['regulators'] = var.copy()
+        elif isinstance(t,tuple):
+            if len(t) == 3:
+                var.append(t[1])
+                parse_terms(t[0], bottom_is_tuple, var, order, all_terms)
+                var.pop()
+            elif len(t) == 2:
+                order.append(t[1])
+                parse_terms(t[0], bottom_is_tuple, var, order, all_terms)
+                order.pop()
+            else:
+                raise RuntimeError(f'Unexpected tuple in series: {t}')
+        elif isinstance(t,list):
+            for e in t:
+                parse_terms(e, bottom_is_tuple, var, order, all_terms)
+        else:
+            raise RuntimeError(f'Unexpected term in series: {t}')
+        return all_terms
+    terms = parse_terms(_parse_series(series), True if "+/-" in series else False)
+    regulators = terms['regulators']
+    del terms['regulators']
+    result = {}
+    result['regulators'] = regulators
+    result['sums'] = {name: terms}
+    return result
+
 # assuming
 # enum qmc_transform_t : int
 # {
@@ -403,7 +450,7 @@ class MultiIntegrator(CPPIntegrator):
     .. warning::
         The `integral_library` passed to the integrators must be the
         same for all of them. Furthermore, an integrator can only be
-        used to integrate the `integral_library` it has beeen
+        used to integrate the `integral_library` it has been
         constructed with.
 
     .. warning::
@@ -617,13 +664,13 @@ class Qmc(CPPIntegrator):
         the integrand function.
 
         The default is the number of logical CPUs allocated to the
-        current process (that is, ``len(os.sched_getaffinity(0))``)
+        current process (that is, ``len(os.sched_getaffinity(0))`` )
         on platforms that expose this information (i.e. Linux+glibc),
         or ``os.cpu_count()``.
 
         If GPUs are used, one additional CPU thread per device
         will be launched for communicating with the device. One
-        can set ``cputhreads'' to zero to disable CPU evaluation
+        can set ``cputhreads`` to zero to disable CPU evaluation
         in this case.
 
     .. seealso::
@@ -767,11 +814,11 @@ class CudaQmc(object):
         The default is the number of logical CPUs allocated to the
         current process (that is, ``len(os.sched_getaffinity(0))``)
         on platforms that expose this information (i.e. Linux+glibc),
-        or ``os.cpu_count()``.
+        or ``os.cpu_count()`` .
 
         If GPUs are used, one additional CPU thread per device
         will be launched for communicating with the device. One
-        can set ``cputhreads'' to zero to disable CPU evaluation
+        can set ``cputhreads`` to zero to disable CPU evaluation
         in this case.
 
     .. seealso::
@@ -874,7 +921,7 @@ class CudaQmc(object):
 class IntegralLibrary(object):
     r'''
     Interface to a c++ library produced by
-    :func:`.make_package` or :func:`.loop_package`.
+    :func:`.code_writer.make_package` or :func:`.loop_package`.
 
     :param shared_object_path:
         str;
@@ -1088,11 +1135,16 @@ class IntegralLibrary(object):
         from stopping since the requested precision epsrel cannot be reached.
         Default: ``abs``.
 
+    :param format:
+        string;
+        The format of the returned result, ``"series"``,
+        ``"ginac"``, ``"sympy"``, ``"mathematica"``,
+        ``"maple"``, or ``"json"``. Default: ``"series"``.
 
     .. seealso::
         A more detailed description of these parameters and
         how they affect timing/precision is given in
-        :numref:`chapter_cpp_amplitude`.
+        :numref:`chapter_secdecutil_amplitude`.
 
     The call operator returns three strings:
     * The integral without its prefactor
@@ -1239,7 +1291,7 @@ class IntegralLibrary(object):
                      mineval=None, maxincreasefac=20., min_epsrel=0.2, min_epsabs=1.e-4,
                      max_epsrel=1.e-14, max_epsabs=1.e-20, min_decrease_factor=0.9,
                      decrease_to_percentage=0.7, wall_clock_limit=1.7976931348623158e+308, # 1.7976931348623158e+308 max double
-                     number_of_threads=0, reset_cuda_after=0, verbose=False, errormode='abs'
+                     number_of_threads=0, reset_cuda_after=0, verbose=False, errormode='abs', format="series"
                 ):
         # Set the default integrator
         if getattr(self, "integrator", None) is None:
@@ -1263,6 +1315,9 @@ class IntegralLibrary(object):
             errormode_enum = 4
         else:
             raise ValueError('Unknown `errormode` "' + str(errormode) + '"')
+
+        if verbose:
+            print(version)
 
 
         # Initialize and launch the underlying c routines in a subprocess
@@ -1289,12 +1344,28 @@ class IntegralLibrary(object):
         integration_thread.daemon = True # daemonize worker to have it killed when the main thread is killed
         integration_thread.start()
         while integration_thread.is_alive(): # keep joining worker until it is finished
-            integration_thread.join(5) # call `join` with `timeout` to keep the main thread interruptable
+            integration_thread.join(5) # call `join` with `timeout` to keep the main thread interruptible
         return_value = return_value_queue.get()
         if return_value != 0:
             raise RuntimeError("Integration failed, see error message above.")
         else:
-            return queue.get()
+            str_integral_without_prefactor, str_prefactor, str_integral_with_prefactor = queue.get()
+            if format == "ginac":
+                str_integral_without_prefactor = series_to_ginac(str_integral_without_prefactor)
+                str_integral_with_prefactor = series_to_ginac(str_integral_with_prefactor)
+            elif format == "sympy":
+                str_integral_without_prefactor = series_to_sympy(str_integral_without_prefactor)
+                str_integral_with_prefactor = series_to_sympy(str_integral_with_prefactor)
+            elif format == "mathematica":
+                str_integral_without_prefactor = series_to_mathematica(str_integral_without_prefactor)
+                str_integral_with_prefactor = series_to_mathematica(str_integral_with_prefactor)
+            elif format == "maple":
+                str_integral_without_prefactor = series_to_maple(str_integral_without_prefactor)
+                str_integral_with_prefactor = series_to_maple(str_integral_with_prefactor)
+            elif format == "json":
+                str_integral_without_prefactor = series_to_json(str_integral_without_prefactor, self.info['name'])
+                str_integral_with_prefactor = series_to_json(str_integral_with_prefactor, self.info['name'])
+            return (str_integral_without_prefactor, str_prefactor, str_integral_with_prefactor)
 
     def _call_implementation(
                                 self, queue, return_value_queue, real_parameters, complex_parameters, together,
@@ -1367,7 +1438,7 @@ class IntegralLibrary(object):
         if compute_integral_return_value != 0:
             return
 
-        # convert c++ stings to python strings or bytes (depending on whether we use python2 or python3)
+        # convert c++ strings to python strings or bytes (depending on whether we use python2 or python3)
         str_integral_without_prefactor = self.c_lib.string2charptr(cpp_str_integral_without_prefactor)
         str_prefactor = self.c_lib.string2charptr(cpp_str_prefactor)
         str_integral_with_prefactor = self.c_lib.string2charptr(cpp_str_integral_with_prefactor)
@@ -1442,7 +1513,7 @@ class DevNullWriter:
 class DistevalLibrary(object):
     r'''
     Interface to the integration library produced by
-    :func:`.make_package` or :func:`.loop_package` and built by
+    :func:`.code_writer.make_package` or :func:`.loop_package` and built by
     ``make disteval``.
 
     :param specification_path:
@@ -1473,22 +1544,28 @@ class DistevalLibrary(object):
     following arguments:
 
     :param parameters:
-        dict of float, optional;
+        dict of str to object, optional;
         A map from parameter names to their values.
+        A value can be any object that can be converted to
+        complex() and to str(). To make sure floating point
+        imprecision does not spoil the results, it is best to
+        pass the values of the parameters as integers, strings,
+        sympy expressions, or fractions.Fraction() objects.
+        Floating point numbers are supported, but not encouraged.
 
     :param real_parameters:
         iterable of float, optional;
         The values of the real parameters of the library in
         the same order as the real_parameters argument of
-        :func:`.make_package`. (Not needed if parameters are
-        given).
+        :func:`.code_writer.make_package`.
+        (Not needed if ``parameters`` are provided).
 
     :param complex_parameters:
         iterable of complex, optional;
         The values of the complex parameters of the library in
         the same order as the complex_parameters argument of
-        :func:`.make_package`. (Not needed if parameters are
-        given).
+        :func:`.code_writer.make_package`.
+        (Not needed if ``parameters`` are provided).
 
     :param number_of_presamples:
         unsigned int, optional;
@@ -1569,8 +1646,10 @@ class DistevalLibrary(object):
         # [1] https://github.com/jupyter/notebook/issues/3397
         # [2] https://github.com/ipython/ipykernel/issues/548
         # [3] https://github.com/python/cpython/issues/66435
-        import nest_asyncio; nest_asyncio.apply()
+        import nest_asyncio
+        nest_asyncio.apply()
         disteval.log_file = sys.stderr if verbose else DevNullWriter()
+        disteval.log(version)
         dirname = os.path.dirname(specification_path)
         if workers is None:
             workers = disteval.default_worker_commands(dirname)
@@ -1583,7 +1662,7 @@ class DistevalLibrary(object):
             parameters={}, real_parameters=[], complex_parameters=[],
             epsabs=1e-10, epsrel=1e-4, timeout=None, points=1e4,
             number_of_presamples=1e4, shifts=32,
-            lattice_candidates=0, standard_lattices=False, 
+            lattice_candidates=0, standard_lattices=False,
             coefficients=None, verbose=None, format="sympy"):
         import asyncio
         import json
@@ -1591,15 +1670,22 @@ class DistevalLibrary(object):
         import sys
         import time
         from . import disteval
+
         if real_parameters or complex_parameters:
             with open(self.filename) as f:
                 spec = json.load(f)
             realp = spec["realp"]
             for i, val in enumerate(real_parameters):
-                parameters[realp[i]] = float(val)
+                parameters[realp[i]] = val
             complexp = spec["complexp"]
             for i, val in enumerate(complex_parameters):
-                parameters[complexp[i]] = complex(val)
+                parameters[complexp[i]] = val
+        valuemap_int = {}
+        valuemap_coeff = {}
+        for key, value in parameters.items():
+            fvalue = complex(value)
+            valuemap_int[key] = fvalue.real if fvalue.imag == 0 else fvalue
+            valuemap_coeff[key] = str(value)
         if not isinstance(epsabs, list) and not isinstance(epsabs, tuple):
             epsabs = [epsabs]
         if not isinstance(epsrel, list) and not isinstance(epsrel, tuple):
@@ -1613,17 +1699,19 @@ class DistevalLibrary(object):
             self.prepared, coefficients, epsabs, epsrel,
             int(number_of_presamples), int(points), int(shifts),
             lattice_candidates, standard_lattices,
-            parameters, parameters, deadline))
-        if format == "sympy":
+            valuemap_int, valuemap_coeff, deadline))
+
+        if format == "raw":
+            return result
+        elif format == "sympy":
             return disteval.result_to_sympy(result)
         elif format == "mathematica":
             return disteval.result_to_mathematica(result)
         else:
-            result["sums"] = {
-                sum_name : {
-                    tuple(exp) : (complex(val_re, val_im), complex(err_re, err_im))
-                    for exp, (val_re, val_im), (err_re, err_im) in sum_terms
-                }
-                for sum_name, sum_terms in result["sums"].items()
-            }
-            return result
+            return disteval.result_to_json(result)
+
+    def close(self):
+        """Shutdown the workers and release all resources."""
+        import asyncio
+        from . import disteval
+        asyncio.run(disteval.clear_eval(self.prepared))

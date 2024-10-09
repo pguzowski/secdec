@@ -10,6 +10,10 @@ from itertools import chain, combinations, product
 import sympy as sp
 import numpy as np
 import warnings
+import sys
+from .metadata import __authors__, __version__, __commit__
+
+version = f'pySecDec {__version__} ({__commit__[:8]}) [Python {sys.version_info.major}.{sys.version_info.minor}.{sys.version_info.micro}, NumPy {np.__version__}, SymPy {sp.__version__}]'
 
 def make_cpp_list(python_list):
     '''
@@ -55,7 +59,7 @@ def powerset(iterable, min_length=0, stride=1):
 
 def rangecomb(low, high):
     '''
-    Return an iterator over the occuring orders in a
+    Return an iterator over the occurring orders in a
     multivariate series expansion between `low` and
     `high`.
 
@@ -69,8 +73,8 @@ def rangecomb(low, high):
 
     >>> from pySecDec.misc import rangecomb
     >>> all_orders = rangecomb([-1,-2], [0,0])
-    >>> list(all_orders)
-    [(-1, -2), (-1, -1), (-1, 0), (0, -2), (0, -1), (0, 0)]
+    >>> list(all_orders) == [(-1, -2), (-1, -1), (-1, 0), (0, -2), (0, -1), (0, 0)]
+    True
 
     '''
     low = np.asarray(low)
@@ -177,7 +181,7 @@ def parallel_det(M, pool):
         sub_indices.remove(i)
         return sub_indices
 
-    # resolve the first row of the matix
+    # resolve the first row of the matrix
     sub_Ms = (M[[[k] for k in range(1,D)],sub_indices(i)] for i in range(D))
     sub_dets = pool.imap(det, sub_Ms)
     result = 0
@@ -215,7 +219,7 @@ def det(M):
         sub_indices.remove(i)
         return sub_indices
 
-    # resolve the first row of the matix
+    # resolve the first row of the matrix
     for i in range(D):
         sub_M = M[[[k] for k in range(1,D)],sub_indices(i)]
         term = M[0,i] * det(sub_M) # recursion
@@ -267,7 +271,7 @@ def argsort_2D_array(array):
     The idea is to bring identical rows together.
 
     .. seealso::
-        If your array is not two dimesional
+        If your array is not two dimensional
         use :func:`.argsort_ND_array`.
 
     Example:
@@ -424,10 +428,11 @@ def sympify_expression(a):
     to a sympy expression
 
     :param a:
-    The object to be converted to a sympy expression.
+        The object to be converted to a sympy expression.
 
     :return:
-    A sympy expression representing the object.
+        A sympy expression representing the object.
+
     '''
     if getattr(a, "_pysecdec_sympy_", None) is not None:
         return a._pysecdec_sympy_()
@@ -487,7 +492,7 @@ def lowest_order(expression, variable):
         The variable in which to expand.
 
     '''
-    # convert to sympy if neccessary
+    # convert to sympy if necessary
     variable = sympify_symbols([variable], '`variable` must be a symbol')[0]
     if not isinstance(expression, sp.Expr):
         expression = sympify_expression(expression)

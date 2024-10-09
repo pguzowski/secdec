@@ -2,6 +2,7 @@ include Makefile.conf
 include $(wildcard codegen/sector*.d)
 
 source : $(SECTOR_CPP)
+source-mma : $(SECTOR_MMA)
 
 lib$(NAME).a : $(patsubst %%.cpp,%%.o,$(SECTOR_CPP)) src/integrands.o src/pole_structures.o src/prefactor.o
 	@rm -f $@
@@ -48,6 +49,10 @@ codegen/sector%%.done: codegen/sector%%.h
 	$(PYTHON) '$(SECDEC_CONTRIB)/bin/export_sector' $(patsubst %%.h,%%.info,$<) ./
 	touch $@
 
+codegen/sector%%.mma.done: codegen/sector%%.done
+	$(PYTHON) '$(SECDEC_CONTRIB)/bin/export_sector' --subset=mma $(patsubst %%.done,%%.info,$<) ./
+	touch $@
+
 # The following is for the distributed evaluation.
 
 SECTOR_ORDERS:=$(patsubst src/sector_%%.cpp,%%,$(filter src/sector_%%.cpp,$(SECTOR_CPP)))
@@ -64,7 +69,7 @@ endif
 
 # CPU files (.so)
 
-XCXXFLAGS=-std=c++14 -O3 -funsafe-math-optimizations $(CXXFLAGS)
+XCXXFLAGS=-std=c++17 -O3 -funsafe-math-optimizations $(CXXFLAGS)
 
 DIST_SO_OBJECTS = $(patsubst %%,distsrc/sector_%%.o,$(SECTOR_ORDERS))
 
@@ -81,7 +86,7 @@ disteval/builtin.so: distsrc/builtin.o
 
 # CUDA files (.fatbin)
 
-XNVCCFLAGS=-std=c++14 $(SECDEC_WITH_CUDA_FLAGS) $(NVCCFLAGS)
+XNVCCFLAGS=-std=c++17 $(SECDEC_WITH_CUDA_FLAGS) $(NVCCFLAGS)
 
 DIST_FATBIN_OBJECTS = $(patsubst %%,distsrc/sector_%%.fatbin,$(SECTOR_ORDERS))
 

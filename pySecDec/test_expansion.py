@@ -18,7 +18,7 @@ class TestSingularExpansion(unittest.TestCase):
         self.p6_1 = Polynomial([(0,),(1,),(2,)], coeffs=['3/16','3/16','-9/16'], polysymbols=['eps'])
         self.p6_2 = ExponentiatedPolynomial([(2,),(3,),(4,)], coeffs=['9/16','-9/8','9/16'], polysymbols=['eps'], exponent=-1)
         self.p6 = Product(self.p6_1,self.p6_2)
-        self.p7 = ExponentiatedPolynomial([(1,1),(1,2),(2,0),(2,1),(2,2),(3,0),(3,1),(4,0)],  
+        self.p7 = ExponentiatedPolynomial([(1,1),(1,2),(2,0),(2,1),(2,2),(3,0),(3,1),(4,0)],
             coeffs=['3/4','-3/4','-3/16','-3/16','9/16','3/32','-9/32','9/256'],
             polysymbols=['n1','eps'], exponent=-1)
 
@@ -197,7 +197,7 @@ class TestExpandSympy(unittest.TestCase):
         variables = ['a', 'b']
         orders = [1,3]
 
-        with pytest.raises(AssertionError, match='(N|n)umber of variables \(2\).*must.*equal.*number of orders \(3\)'):
+        with pytest.raises(AssertionError, match=r'(N|n)umber of variables \(2\).*must.*equal.*number of orders \(3\)'):
             expand_sympy(expression, variables, [0,0,1])
         with pytest.raises(AssertionError, match='variables.*must.*symbols'):
             expand_sympy(expression, ['a+b','x'], orders)
@@ -212,7 +212,7 @@ class TestExpandSympy(unittest.TestCase):
         variables = ['x']
         orders = [1]
         for error_t in (ValueError, OrderError):
-            with pytest.raises(error_t, match='lowest order.*x.*\(3\).*higher than.*requested.*\(1\)'):
+            with pytest.raises(error_t, match=r'lowest order.*x.*\(3\).*higher than.*requested.*\(1\)'):
                 expand_sympy(expression, variables, orders)
 
     #@pytest.mark.active
@@ -368,7 +368,7 @@ class TestExpandGinac(unittest.TestCase):
         variables = ['a', 'b']
         orders = [1,3]
 
-        with pytest.raises(AssertionError, match='(N|n)umber of variables \(2\).*must.*equal.*number of orders \(3\)'):
+        with pytest.raises(AssertionError, match=r'(N|n)umber of variables \(2\).*must.*equal.*number of orders \(3\)'):
             expand_ginac(expression, variables, [0,0,1])
         with pytest.raises(AssertionError, match='variables.*must.*symbols'):
             expand_ginac(expression, ['a+b','x'], orders)

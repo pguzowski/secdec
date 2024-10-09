@@ -3,13 +3,14 @@ import sys
 Import("env")
 
 cuba = "Cuba-4.2.2"
-form = "form-4.3.0"
+zlib = "zlib-1.2.13"
+form = "form-4.3.1"
 gmp = "gmp-6.2.1"
 gsl = "gsl-2.7.1"
 nauty = "nauty2_8_6"
 normaliz = "normaliz-3.9.2"
 cln = "cln-1.3.6"
-ginac = "ginac-1.8.4"
+ginac = "ginac-1.8.7"
 
 contrib_extra_source = File(Split(f"""
     SConscript
@@ -34,7 +35,7 @@ contrib += \
     Install("include/secdecutil", Glob("util/secdecutil/*hpp")) + \
     Install("include/secdecutil/integrators", Glob("util/secdecutil/integrators/*hpp"))
 
-def ConfigureAndInstall(env, target, packagename, extension=".tar.gz", extra_sources=[], pre_commands="", post_commands="", extra_configure_args="", build_target="", install_target="install"):
+def ConfigureAndInstall(env, target, packagename, extension=".tar.gz", extra_sources=[], pre_commands="", post_commands="", extra_configure_args="", build_target="", install_target="install", bindir=True):
     return env.Command(target, [f"{packagename}{extension}"] + extra_sources, f"""
         cd pySecDecContrib && \
         tar -xf {packagename}{extension} && \
@@ -44,7 +45,7 @@ def ConfigureAndInstall(env, target, packagename, extension=".tar.gz", extra_sou
             --prefix="$$PWD/../install" \
             --libdir="$$PWD/../lib" \
             --includedir="$$PWD/../include" \
-            --bindir="$$PWD/../bin" \
+            {'--bindir="$$PWD/../bin"' if bindir else ''} \
             {extra_configure_args} && \
         {post_commands} \
         make {build_target} && \
@@ -65,10 +66,15 @@ contrib += \
         extra_configure_args="CFLAGS='-O3 -fomit-frame-pointer -ffast-math -fno-finite-math-only -fexceptions -fcommon -fPIC'",
         build_target="lib")
 
+zlib_files = ["lib/libz.a", "include/zlib.h", "include/zconf.h"]
+contrib += \
+    ConfigureAndInstall(env, zlib_files, zlib, extra_configure_args="--static", bindir=False)
+
 form_files = ["bin/form", "bin/tform"]
 contrib += \
     ConfigureAndInstall(env, form_files, form,
-        extra_configure_args="--without-gmp --without-zlib --enable-native=no")
+        extra_sources = zlib_files,
+        extra_configure_args="--without-gmp --with-zlib --enable-native=no")
 
 gmp_files = open(f"{gmp}.list").read().splitlines()
 contrib += \
@@ -136,9 +142,9 @@ contrib += env.Program("bin/pysecdec_listcuda", [f"disteval/listcuda.cpp"],
     LINKFLAGS="-s")
 File("disteval/minicuda.h")
 
-File("bin/export_sector")
-File("bin/formwrapper")
-File("lib/write_contour_deformation.frm")
-File("lib/write_integrand.frm")
+contrib += [File("bin/export_sector")]
+contrib += [File("bin/formwrapper")]
+contrib += [File("lib/write_contour_deformation.frm")]
+contrib += [File("lib/write_integrand.frm")]
 
 Return("contrib")

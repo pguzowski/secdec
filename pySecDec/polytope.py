@@ -6,11 +6,14 @@ The polytope class as required by :mod:`pySecDec.make_regions`
 and :mod:`pySecDec.decomposition.geometric`.
 
 """
-
 from .algebra import Polynomial
-import os, shutil, subprocess, re, numpy as np
+import os
+import shutil
+import subprocess
+import numpy as np
 
 import pySecDecContrib
+
 
 def convex_hull(*polynomials):
     '''
@@ -23,7 +26,7 @@ def convex_hull(*polynomials):
     of the product of all input polynomials.
 
     :param polynomials:
-        abritrarily many instances of :class:`.Polynomial` where
+        arbitrarily many instances of :class:`.Polynomial` where
         all of these have an equal number of variables;
         The polynomials to calculate the convex hull for.
 
@@ -157,8 +160,7 @@ def triangulate(cone, normaliz=None, workdir='normaliz_tmp', keep_workdir=False,
 
     .. note::
         This function calls the command line executable of
-        `normaliz` [BIR]_. See :ref:`installation_normaliz`
-        for installation and a list of tested versions.
+        `normaliz` [BIR]_.
 
 
     :param cone:
@@ -202,7 +204,7 @@ def triangulate(cone, normaliz=None, workdir='normaliz_tmp', keep_workdir=False,
 
     os.mkdir(workdir)
     try:
-        if switch_representation == False:
+        if not switch_representation:
             run_card_as_str = normaliz_runcard(cone, 'cone', cone.shape[1])
         else:
             run_card_as_str = normaliz_runcard(cone, 'inequalities', cone.shape[1])
@@ -347,8 +349,8 @@ class Polytope(object):
     def vertex_incidence_lists(self):
         '''
         Return for each vertex the list of facets it
-        lies in (as dictonary). The keys of the output
-        dictonary are the vertices while the values
+        lies in (as dictionary). The keys of the output
+        dictionary are the vertices while the values
         are the indices of the facets in ``self.facets``.
 
         '''

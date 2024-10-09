@@ -228,7 +228,8 @@ commands:
 >>> one_loop_bubble.F
  + (-p**2)*x0*x1
 
-The example above among other useful features is also stated in the full documenation of
+The example above among other useful features is also stated in the full
+documentation of
 :class:`LoopIntegralFromPropagators() <pySecDec.loop_integral.LoopIntegralFromPropagators>`
 in the reference guide.
 
@@ -287,6 +288,7 @@ We can also generate the output in terms of Mandelstam invariants:
 >>> box.numerator
  + (eps - 2)*x6*F + (eps - 2)*x5*F + (eps - 2)*x4*F + (eps - 2)*x3*F + (-2*eps*t - 2*t)*x3*x6*U + (-2*eps*s - 2*eps*t - 2*s - 2*t)*x3*x5*U + (-2*eps*t - 2*t)*x3*x4*U + (2*eps*t + 2*t)*x3**2*x6**2 + (2*eps*t + 2*t)*x3**2*x5*x6 + (2*eps*t + 2*t)*x3**2*x4*x6 + (-2*eps*s - 2*s)*x3**2*x4*x5 + (-2*eps*s - 2*eps*t - 2*s - 2*t)*x2*x6*U + (-2*eps*s - 2*eps*t - 2*s - 2*t)*x2*x5*U + (-2*eps*s - 2*eps*t - 2*s - 2*t)*x2*x4*U + (-2*eps*s - 2*eps*t - 2*s - 2*t)*x2*x3*U + (2*eps*t + 2*t)*x2*x3*x6**2 + (2*eps*t + 2*t)*x2*x3*x5*x6 + (-2*eps*s + 2*eps*t - 2*s + 2*t)*x2*x3*x4*x6 + (-2*eps*s - 2*s)*x2*x3*x4*x5 + (-2*eps*s - 2*s)*x2*x3*x4**2 + (2*eps*t + 2*t)*x2*x3**2*x6 + (-2*eps*s - 2*s)*x2*x3**2*x4 + (-2*eps*t - 2*t)*x1*x6*U + (-2*eps*t - 2*t)*x1*x5*U + (-2*eps*t - 2*t)*x1*x4*U + (-2*eps*t - 2*t)*x1*x3*U + (2*eps*t + 2*t)*x1*x3*x6**2 + (-2*eps*s + 2*eps*t - 2*s + 2*t)*x1*x3*x5*x6 + (-2*eps*s - 2*s)*x1*x3*x5**2 + (2*eps*t + 2*t)*x1*x3*x4*x6 + (-2*eps*s - 2*s)*x1*x3*x4*x5 + (2*eps*t + 2*t)*x1*x3**2*x6 + (-2*eps*s - 2*s)*x1*x3**2*x5 + (-2*eps*s - 2*s)*x1*x2*x6**2 + (-4*eps*s - 4*s)*x1*x2*x5*x6 + (-2*eps*s - 2*s)*x1*x2*x5**2 + (-4*eps*s - 4*s)*x1*x2*x4*x6 + (-4*eps*s - 4*s)*x1*x2*x4*x5 + (-2*eps*s - 2*s)*x1*x2*x4**2 + (-4*eps*s - 4*s)*x1*x2*x3*x6 + (-4*eps*s - 4*s)*x1*x2*x3*x5 + (-4*eps*s - 4*s)*x1*x2*x3*x4 + (-2*eps*s - 2*s)*x1*x2*x3**2
 
+.. _sector_decomposition:
 
 Sector Decomposition
 --------------------
@@ -409,7 +411,7 @@ This declaration is necessary if we want to simultaneously decompose ``p1`` and 
 
 
 We just fully decomposed ``p1`` and ``p2``. In some cases, one may want to bring
-one polynomial, say ``p1``, into standard form, but not neccessarily the other.
+one polynomial, say ``p1``, into standard form, but not necessarily the other.
 For that purpose, the :class:`Sector <pySecDec.decomposition.Sector>` can take
 a second argument. In the following code example, we bring ``p1`` into standard
 form, apply all transformations to ``p2`` as well, but stop before ``p2`` is fully
@@ -644,7 +646,7 @@ output, we can convert these expressions to the slower but more high level `symp
 >>> import sympy as sp
 >>> eps_first = expand_singular(expression, [0,1], [1,1])
 >>> alpha_first = expand_singular(expression, [1,0], [1,1])
->>> sp.sympify(eps_first)
+>>> sp.sympify(str(eps_first))
 1/(2*alpha*eps) - 1/(2*alpha**2) + eps/(2*alpha**3)
->>> sp.sympify(alpha_first)
+>>> sp.sympify(str(alpha_first))
 -alpha/(2*eps**3) + 1/(2*eps**2)
