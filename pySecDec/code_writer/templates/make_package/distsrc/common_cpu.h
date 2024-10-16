@@ -2,7 +2,7 @@
 #include <complex>
 
 typedef int64_t int_t;
-typedef double real_t;
+typedef float real_t;
 typedef std::complex<real_t> complex_t;
 
 #define REAL_NAN NAN

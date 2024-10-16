@@ -29,7 +29,7 @@
     #define unlikely(x) (x)
 #endif
 
-typedef double real_t;
+typedef float real_t;
 typedef struct { double re, im; } complex_t;
 
 #define MAXPATH 4095

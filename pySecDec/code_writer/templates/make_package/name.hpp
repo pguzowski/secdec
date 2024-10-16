@@ -26,7 +26,7 @@ namespace %(name)s
 
     // basic data types
     // --{
-    typedef double real_t;
+    typedef float real_t;
     #ifdef SECDEC_WITH_CUDA
         typedef thrust::complex<real_t> complex_t;
     #else
